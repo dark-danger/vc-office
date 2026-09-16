@@ -90,7 +90,7 @@ export const AnnouncementsPage: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-[var(--text-primary)]">Broadcast Announcements</h2>
           <p className="text-xs text-[var(--text-secondary)] mt-1">
-            {isAdmin ? 'Publish campus updates targeted to Faculty, Students, or both with pinning and emoji reactions.' : 'View official university circulars and react to campus updates.'}
+            {isAdmin ? 'Publish executive campus circulars and updates with priority pinning and emoji reactions.' : 'View official university circulars and executive notices.'}
           </p>
         </div>
         {isAdmin && (
@@ -193,7 +193,7 @@ export const AnnouncementsPage: React.FC = () => {
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
                   <label className="block text-xs font-semibold text-[var(--text-secondary)]">Announcement Body</label>
-                  <ImproveEnglishButton text={body} onImproved={setBody} context="Campus announcement message for faculty and students" />
+                  <ImproveEnglishButton text={body} onImproved={setBody} context="Campus announcement message for faculty and staff" />
                 </div>
                 <textarea required rows={5} value={body} onChange={e => setBody(e.target.value)} placeholder="Type announcement details..." className="glass-input text-xs" />
               </div>
@@ -202,9 +202,8 @@ export const AnnouncementsPage: React.FC = () => {
                 <div>
                   <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Target Audience</label>
                   <select value={audience} onChange={e => setAudience(e.target.value as any)} className="glass-input text-xs">
-                    <option value="both">All (Faculty & Students)</option>
-                    <option value="faculty">Faculty Only</option>
-                    <option value="students">Students Only</option>
+                    <option value="both">All Faculty & Staff</option>
+                    <option value="faculty">Department Coordinators Only</option>
                   </select>
                 </div>
 

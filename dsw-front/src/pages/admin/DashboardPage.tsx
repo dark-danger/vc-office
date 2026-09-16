@@ -107,7 +107,7 @@ export const AdminDashboardPage: React.FC = () => {
       </div>
 
       {/* Top KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="glass-card p-5 border-l-4 border-l-[#0e8a6e]">
           <div className="flex items-center justify-between">
             <div>
@@ -119,19 +119,6 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
           </div>
           <p className="text-[11px] text-[var(--text-muted)] mt-3">Total registered staff members</p>
-        </div>
-
-        <div className="glass-card p-5 border-l-4 border-l-emerald-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-[var(--text-muted)]">Total Students</p>
-              <h3 className="text-2xl font-black text-[var(--text-primary)] mt-1">{summary.total_students}</h3>
-            </div>
-            <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-500">
-              <Users className="w-6 h-6" />
-            </div>
-          </div>
-          <p className="text-[11px] text-[var(--text-muted)] mt-3">Registered student profiles</p>
         </div>
 
         <div className="glass-card p-5 border-l-4 border-l-teal-500">

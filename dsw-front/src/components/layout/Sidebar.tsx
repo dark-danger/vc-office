@@ -3,8 +3,8 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard, Users, Calendar, CheckSquare, Megaphone,
-  HelpCircle, FileText, MessageSquareHeart, Trophy, Medal,
-  GraduationCap, Sparkles, Shield, FileCheck, Award, Mail, X, ClipboardCheck
+  HelpCircle, FileText, MessageSquareHeart, Medal,
+  X, ClipboardCheck
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -28,7 +28,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     { label: 'Events & Calendar', path: '/admin/events', icon: <Calendar className="w-4 h-4" /> },
     { label: 'Official Event Reports', path: '/admin/events/reports', icon: <FileText className="w-4 h-4 text-amber-400" /> },
     { label: 'Task Assignment', path: '/admin/tasks', icon: <CheckSquare className="w-4 h-4" /> },
-    { label: 'Core Committees', path: '/admin/committees', icon: <Award className="w-4 h-4 text-teal-400" /> },
     { label: 'Announcements', path: '/admin/announcements', icon: <Megaphone className="w-4 h-4" /> },
     { label: 'Query Inbox', path: '/admin/queries', icon: <HelpCircle className="w-4 h-4" /> },
     { label: 'Feedback Forms', path: '/admin/feedback', icon: <MessageSquareHeart className="w-4 h-4" /> },
@@ -39,20 +38,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     { label: 'My Dashboard', path: '/faculty/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
     { label: 'Official Event Reports', path: '/faculty/events/reports', icon: <FileText className="w-4 h-4 text-amber-400" /> },
     { label: 'My Assigned Tasks', path: '/faculty/tasks', icon: <CheckSquare className="w-4 h-4" /> },
-    { label: 'Core Committees', path: '/faculty/committees', icon: <Award className="w-4 h-4 text-teal-400" /> },
     { label: 'Announcements', path: '/faculty/announcements', icon: <Megaphone className="w-4 h-4" /> },
     { label: 'Raise Query', path: '/faculty/queries', icon: <HelpCircle className="w-4 h-4" /> },
     { label: 'Staff Leaderboard', path: '/faculty/leaderboard', icon: <Medal className="w-4 h-4 text-emerald-400" /> },
   ];
 
-  const studentNav: SidebarItem[] = [
-    { label: 'Student Portal', path: '/student/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
-    { label: 'Core Committees', path: '/student/committees', icon: <Award className="w-4 h-4 text-teal-400" /> },
-    { label: 'Announcements', path: '/student/announcements', icon: <Megaphone className="w-4 h-4" /> },
-    { label: 'Raise Query', path: '/student/queries', icon: <HelpCircle className="w-4 h-4" /> },
-  ];
-
-  const navItems = user?.role === 'super_admin' ? adminNav : user?.role === 'faculty' ? facultyNav : studentNav;
+  const navItems = user?.role === 'super_admin' ? adminNav : facultyNav;
 
   return (
     <aside
@@ -117,4 +108,3 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     </aside>
   );
 };
-

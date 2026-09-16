@@ -9,8 +9,8 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState('student@geeta.edu.in');
-  const [password, setPassword] = useState('student123');
+  const [email, setEmail] = useState('admin@geeta.edu.in');
+  const [password, setPassword] = useState('Admin@12345');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -26,10 +26,8 @@ export const LoginPage: React.FC = () => {
       // Auto-redirect based on authenticated user's role
       if (data.user.role === 'super_admin') {
         navigate('/admin/dashboard');
-      } else if (data.user.role === 'faculty') {
-        navigate('/faculty/dashboard');
       } else {
-        navigate('/student/dashboard');
+        navigate('/faculty/dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check credentials.');
@@ -66,8 +64,8 @@ export const LoginPage: React.FC = () => {
           <span className="inline-block px-3 py-0.5 text-[10px] uppercase font-bold tracking-widest rounded-full border bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
             Geeta University VC Office Portal
           </span>
-          <h2 className="text-2xl font-extrabold text-[var(--text-primary)] tracking-tight font-display">Login Here</h2>
-          <p className="text-xs text-[var(--text-secondary)] font-medium">Enter your credentials to access your VC Office workstation</p>
+          <h2 className="text-2xl font-extrabold text-[var(--text-primary)] tracking-tight font-display">Executive & Faculty Login</h2>
+          <p className="text-xs text-[var(--text-secondary)] font-medium">Enter your credentials to access your VC Office administration workstation</p>
         </div>
 
         {error && (
@@ -78,7 +76,7 @@ export const LoginPage: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">Email Address</label>
+            <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">University Email Address</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
               <input
@@ -86,7 +84,7 @@ export const LoginPage: React.FC = () => {
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="user@geeta.edu.in"
+                placeholder="faculty@geeta.edu.in"
                 className="glass-input pl-9"
               />
             </div>

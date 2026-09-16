@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../../lib/api';
 import { 
-  Trophy, Flame, Sparkles, Calendar, ArrowRight, Shield, 
-  Briefcase, GraduationCap, Star, Award, CheckCircle2, Music, Activity
+  Trophy, Sparkles, Calendar, ArrowRight, Shield, 
+  Award, Music, Activity, CheckSquare, Users
 } from 'lucide-react';
 import { ThemeToggle } from '../../components/common/ThemeToggle';
 
@@ -16,29 +16,16 @@ interface EventItem {
   venue: string;
 }
 
-interface StudentRank {
-  student_id: number;
-  name: string;
-  course_branch: string;
-  total_points: number;
-  rank: number;
-}
-
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const [events, setEvents] = useState<EventItem[]>([]);
-  const [topStudents, setTopStudents] = useState<StudentRank[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadLandingData() {
       try {
-        const [eventsData, rankingsData] = await Promise.all([
-          apiRequest<EventItem[]>('/events'),
-          apiRequest<StudentRank[]>('/leaderboard/students/rankings')
-        ]);
+        const eventsData = await apiRequest<EventItem[]>('/events');
         setEvents(eventsData.slice(0, 3));
-        setTopStudents(rankingsData.slice(0, 3));
       } catch (e) {
         console.error("Error loading public landing data:", e);
       } finally {
@@ -85,65 +72,65 @@ export const LandingPage: React.FC = () => {
           </div>
           
           <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight leading-tight text-[var(--text-primary)] font-display">
-            Empowering Campus Life, <br />
+            Executive Governance, <br />
             <span className="bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-400 dark:from-emerald-400 dark:via-teal-300 dark:to-white bg-clip-text text-transparent">
-              Academic Leadership & Excellence
+              Academic Leadership & Institutional Excellence
             </span>
           </h1>
 
           <p className="text-xs sm:text-base text-[var(--text-secondary)] max-w-2xl mx-auto font-medium leading-relaxed">
-            Centralized hub for Geeta University executive governance, faculty coordination, and student initiatives. Track task duties, manage institutional events, oversee duty charts, and monitor campus progress.
+            Centralized platform for Geeta University executive governance and faculty coordination. Track assigned departmental tasks, manage institutional events, review compliance reports, and monitor university excellence.
           </p>
 
           <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 pt-2 sm:pt-4 w-full sm:w-auto">
             <button onClick={() => navigate('/login')} className="btn-primary text-sm sm:text-base px-6 sm:px-8 py-3 w-full sm:w-auto justify-center">
-              Explore User Portal
+              Executive & Faculty Sign In
               <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
             <a href="#events" className="btn-secondary text-sm sm:text-base px-6 sm:px-8 py-3 w-full sm:w-auto justify-center text-center">
-              Upcoming Events & Initiatives
+              Upcoming Events & Directives
             </a>
           </div>
         </div>
       </section>
 
-      {/* Feature Showcase Grid (Star Nights, Sports, Events) */}
+      {/* Feature Showcase Grid */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-8 sm:space-y-12">
         <div className="text-center space-y-2">
-          <h2 className="text-3xl font-extrabold text-[var(--text-primary)] font-display">Institutional Vibrancy & Highlights</h2>
-          <p className="text-xs text-[var(--text-secondary)]">Discover the pulse of student & faculty activities at Geeta University</p>
+          <h2 className="text-3xl font-extrabold text-[var(--text-primary)] font-display">Institutional Pillars</h2>
+          <p className="text-xs text-[var(--text-secondary)]">Driving academic excellence, institutional research, and faculty coordination</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Card 1: Star Nights */}
+          {/* Card 1: Faculty Task Directives */}
           <div className="glass-card p-6 relative overflow-hidden group border-emerald-500/30">
             <div className="p-3 w-12 h-12 rounded-xl bg-emerald-500/15 text-emerald-500 mb-4 flex items-center justify-center border border-emerald-500/30">
-              <Music className="w-6 h-6" />
+              <CheckSquare className="w-6 h-6" />
             </div>
-            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">Celebrity Star Nights</h3>
+            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">Faculty Task Governance</h3>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">
-              Unforgettable cultural symposiums, musical concerts, and DJ nights featuring renowned artists and guest keynotes.
+              Direct assignment of administrative duties, event oversight, proof verification, and automated staff performance scoring.
             </p>
             <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              Annual Technophilia Fest <Sparkles className="w-3.5 h-3.5" />
+              Accountability & Progress <Sparkles className="w-3.5 h-3.5" />
             </span>
           </div>
 
-          {/* Card 2: Sports Tournaments */}
+          {/* Card 2: Institutional Events */}
           <div className="glass-card p-6 relative overflow-hidden group border-teal-500/30">
             <div className="p-3 w-12 h-12 rounded-xl bg-teal-500/15 text-teal-600 dark:text-teal-400 mb-4 flex items-center justify-center border border-teal-500/30">
-              <Activity className="w-6 h-6" />
+              <Calendar className="w-6 h-6" />
             </div>
-            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">Sports Meet & Leagues</h3>
+            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">University Events & Calendar</h3>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">
-              Inter-departmental cricket, football, athletics, and indoor games championships with live leaderboard scoring.
+              University convocation, academic symposiums, national conferences, and departmental seminars.
             </p>
             <span className="text-xs font-semibold text-teal-600 dark:text-teal-300 flex items-center gap-1">
-              Geeta Sports Cup 2026 <Trophy className="w-3.5 h-3.5" />
+              Institutional Calendar 2026 <Trophy className="w-3.5 h-3.5" />
             </span>
           </div>
 
-          {/* Card 3: Institutional Event Reports */}
+          {/* Card 3: Compliance & Reporting */}
           <div className="glass-card p-6 relative overflow-hidden group border-emerald-500/30">
             <div className="p-3 w-12 h-12 rounded-xl bg-emerald-500/15 text-emerald-500 mb-4 flex items-center justify-center border border-emerald-500/30">
               <Shield className="w-6 h-6" />

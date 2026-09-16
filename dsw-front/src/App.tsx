@@ -24,11 +24,7 @@ const StaffLeaderboardPage = React.lazy(() => import('./pages/admin/StaffLeaderb
 const FacultyDashboardPage = React.lazy(() => import('./pages/faculty/FacultyDashboardPage').then(m => ({ default: m.FacultyDashboardPage })));
 const MyTasksPage = React.lazy(() => import('./pages/faculty/MyTasksPage').then(m => ({ default: m.MyTasksPage })));
 
-// Student Pages (Lazy Loaded)
-const StudentDashboardPage = React.lazy(() => import('./pages/student/StudentDashboardPage').then(m => ({ default: m.StudentDashboardPage })));
-
 // Shared Pages (Lazy Loaded)
-const CoreCommitteesPage = React.lazy(() => import('./pages/shared/CoreCommitteesPage').then(m => ({ default: m.CoreCommitteesPage })));
 const EventReportsListPage = React.lazy(() => import('./pages/shared/EventReportsListPage').then(m => ({ default: m.EventReportsListPage })));
 const EventReportFormPage = React.lazy(() => import('./pages/shared/EventReportFormPage').then(m => ({ default: m.EventReportFormPage })));
 
@@ -51,10 +47,9 @@ export const App: React.FC = () => {
         <BrowserRouter>
           <Suspense fallback={<PageLoader />}>
             <Routes>
-              {/* Public Landing & Dedicated Authentication Portals */}
+              {/* Public Landing & Authentication Portals */}
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/student/login" element={<LoginPage />} />
               <Route path="/faculty/login" element={<LoginPage />} />
               <Route path="/admin/login" element={<LoginPage />} />
               <Route path="/feedback/:id" element={<PublicFeedbackFormPage />} />
@@ -69,7 +64,6 @@ export const App: React.FC = () => {
                 <Route path="events/reports/new" element={<EventReportFormPage />} />
                 <Route path="events/reports/:id" element={<EventReportFormPage />} />
                 <Route path="tasks" element={<TasksPage />} />
-                <Route path="committees" element={<CoreCommitteesPage />} />
                 <Route path="announcements" element={<AnnouncementsPage />} />
                 <Route path="queries" element={<QueriesPage />} />
                 <Route path="feedback" element={<FeedbackPage />} />
@@ -84,19 +78,9 @@ export const App: React.FC = () => {
                 <Route path="events/reports/new" element={<EventReportFormPage />} />
                 <Route path="events/reports/:id" element={<EventReportFormPage />} />
                 <Route path="tasks" element={<MyTasksPage />} />
-                <Route path="committees" element={<CoreCommitteesPage />} />
                 <Route path="announcements" element={<AnnouncementsPage />} />
                 <Route path="queries" element={<QueriesPage />} />
                 <Route path="leaderboard" element={<StaffLeaderboardPage />} />
-                <Route path="*" element={<Navigate to="dashboard" replace />} />
-              </Route>
-
-              {/* Student Portal */}
-              <Route path="/student" element={<AppLayout allowedRoles={['student']} pageTitle="Student Workstation Portal" />}>
-                <Route path="dashboard" element={<StudentDashboardPage />} />
-                <Route path="committees" element={<CoreCommitteesPage />} />
-                <Route path="announcements" element={<AnnouncementsPage />} />
-                <Route path="queries" element={<QueriesPage />} />
                 <Route path="*" element={<Navigate to="dashboard" replace />} />
               </Route>
 
@@ -111,4 +95,3 @@ export const App: React.FC = () => {
 };
 
 export default App;
-

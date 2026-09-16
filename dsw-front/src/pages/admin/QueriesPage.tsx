@@ -148,10 +148,8 @@ export const QueriesPage: React.FC = () => {
           </h2>
           <p className="text-xs text-[var(--text-secondary)] mt-1">
             {isSuperAdmin
-              ? 'Review student & faculty tickets, issue official resolution responses, and resolve grievances.'
-              : user?.role === 'faculty'
-              ? 'View queries directed to you as Faculty Head/Coordinator or submit inquiries to VC Office.'
-              : 'Submit your queries or grievances directly to either Admin (VC Office) or your Faculty Head / Club Coordinator.'}
+              ? 'Review faculty tickets, issue official resolution responses, and resolve grievances.'
+              : 'Submit inquiries or administrative requests directly to the VC Office.'}
           </p>
         </div>
 
@@ -382,12 +380,12 @@ export const QueriesPage: React.FC = () => {
                   className="glass-input text-xs"
                 >
                   <option value="General">General Inquiry</option>
-                  <option value="Club & Society">Student Club & Society</option>
-                  <option value="Academic">Academic & Exams</option>
-                  <option value="Hostel">Hostel & Campus Facilities</option>
-                  <option value="Financial">Financial & Fees</option>
-                  <option value="Sports & Events">Sports & Extra-Curricular Events</option>
-                  <option value="Grievance">Grievance / Complaint</option>
+                  <option value="Academic">Academic & Departmental</option>
+                  <option value="Administrative">Administrative Support</option>
+                  <option value="Facilities">Campus & Lab Facilities</option>
+                  <option value="Financial">Financial & Approvals</option>
+                  <option value="Events">Institutional Events</option>
+                  <option value="Grievance">Grievance / Feedback</option>
                   <option value="Other">Other</option>
                 </select>
               </div>
@@ -446,7 +444,7 @@ export const QueriesPage: React.FC = () => {
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
                   <label className="block text-xs font-semibold text-[var(--text-secondary)]">Official Resolution Remarks *</label>
-                  <ImproveEnglishButton text={adminRemarks} onImproved={setAdminRemarks} context="Official administrative resolution remarks and solution to student/faculty query" />
+                  <ImproveEnglishButton text={adminRemarks} onImproved={setAdminRemarks} context="Official administrative resolution remarks and solution to faculty query" />
                 </div>
                 <textarea
                   required
