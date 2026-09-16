@@ -9,8 +9,9 @@ const LoginPage = React.lazy(() => import('./pages/LoginPage').then(m => ({ defa
 const LandingPage = React.lazy(() => import('./pages/public/LandingPage').then(m => ({ default: m.LandingPage })));
 const PublicFeedbackFormPage = React.lazy(() => import('./pages/public/PublicFeedbackFormPage').then(m => ({ default: m.PublicFeedbackFormPage })));
 
-// Admin Pages (Lazy Loaded)
+// VC Office Admin Pages (Lazy Loaded)
 const AdminDashboardPage = React.lazy(() => import('./pages/admin/DashboardPage').then(m => ({ default: m.AdminDashboardPage })));
+const DepartmentsPage = React.lazy(() => import('./pages/admin/DepartmentsPage').then(m => ({ default: m.DepartmentsPage })));
 const AdminRequestsPage = React.lazy(() => import('./pages/admin/AdminRequestsPage').then(m => ({ default: m.AdminRequestsPage })));
 const FacultyPage = React.lazy(() => import('./pages/admin/FacultyPage').then(m => ({ default: m.FacultyPage })));
 const EventsPage = React.lazy(() => import('./pages/admin/EventsPage').then(m => ({ default: m.EventsPage })));
@@ -20,11 +21,17 @@ const QueriesPage = React.lazy(() => import('./pages/admin/QueriesPage').then(m 
 const FeedbackPage = React.lazy(() => import('./pages/admin/FeedbackPage').then(m => ({ default: m.FeedbackPage })));
 const StaffLeaderboardPage = React.lazy(() => import('./pages/admin/StaffLeaderboardPage').then(m => ({ default: m.StaffLeaderboardPage })));
 
+// Department Head Pages (Lazy Loaded)
+const HeadDashboardPage = React.lazy(() => import('./pages/head/HeadDashboardPage').then(m => ({ default: m.HeadDashboardPage })));
+const HeadTasksPage = React.lazy(() => import('./pages/head/HeadTasksPage').then(m => ({ default: m.HeadTasksPage })));
+const HeadFacultyPage = React.lazy(() => import('./pages/head/HeadFacultyPage').then(m => ({ default: m.HeadFacultyPage })));
+
 // Faculty Pages (Lazy Loaded)
 const FacultyDashboardPage = React.lazy(() => import('./pages/faculty/FacultyDashboardPage').then(m => ({ default: m.FacultyDashboardPage })));
 const MyTasksPage = React.lazy(() => import('./pages/faculty/MyTasksPage').then(m => ({ default: m.MyTasksPage })));
 
 // Shared Pages (Lazy Loaded)
+const DepartmentLeaderboardPage = React.lazy(() => import('./pages/shared/DepartmentLeaderboardPage').then(m => ({ default: m.DepartmentLeaderboardPage })));
 const EventReportsListPage = React.lazy(() => import('./pages/shared/EventReportsListPage').then(m => ({ default: m.EventReportsListPage })));
 const EventReportFormPage = React.lazy(() => import('./pages/shared/EventReportFormPage').then(m => ({ default: m.EventReportFormPage })));
 
@@ -50,13 +57,16 @@ export const App: React.FC = () => {
               {/* Public Landing & Authentication Portals */}
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/head/login" element={<LoginPage />} />
               <Route path="/faculty/login" element={<LoginPage />} />
               <Route path="/admin/login" element={<LoginPage />} />
               <Route path="/feedback/:id" element={<PublicFeedbackFormPage />} />
 
-              {/* VC Office Admin Portal */}
+              {/* 1. VC Office Admin Portal */}
               <Route path="/admin" element={<AppLayout allowedRoles={['super_admin']} pageTitle="VC Office Administration Portal" />}>
                 <Route path="dashboard" element={<AdminDashboardPage />} />
+                <Route path="departments" element={<DepartmentsPage />} />
+                <Route path="department-leaderboard" element={<DepartmentLeaderboardPage />} />
                 <Route path="requests" element={<AdminRequestsPage />} />
                 <Route path="faculty" element={<FacultyPage />} />
                 <Route path="events" element={<EventsPage />} />
@@ -71,16 +81,32 @@ export const App: React.FC = () => {
                 <Route path="*" element={<Navigate to="dashboard" replace />} />
               </Route>
 
-              {/* Faculty Portal */}
-              <Route path="/faculty" element={<AppLayout allowedRoles={['faculty']} pageTitle="Faculty Workstation Portal" />}>
-                <Route path="dashboard" element={<FacultyDashboardPage />} />
+              {/* 2. Department Head Portal */}
+              <Route path="/head" element={<AppLayout allowedRoles={['department_head']} pageTitle="Department Head Executive Portal" />}>
+                <Route path="dashboard" element={<HeadDashboardPage />} />
+                <Route path="tasks" element={<HeadTasksPage />} />
+                <Route path="faculty" element={<HeadFacultyPage />} />
+                <Route path="department-leaderboard" element={<DepartmentLeaderboardPage />} />
+                <Route path="leaderboard" element={<StaffLeaderboardPage />} />
                 <Route path="events/reports" element={<EventReportsListPage />} />
                 <Route path="events/reports/new" element={<EventReportFormPage />} />
                 <Route path="events/reports/:id" element={<EventReportFormPage />} />
-                <Route path="tasks" element={<MyTasksPage />} />
                 <Route path="announcements" element={<AnnouncementsPage />} />
                 <Route path="queries" element={<QueriesPage />} />
+                <Route path="*" element={<Navigate to="dashboard" replace />} />
+              </Route>
+
+              {/* 3. Faculty Workstation Portal */}
+              <Route path="/faculty" element={<AppLayout allowedRoles={['faculty']} pageTitle="Faculty Workstation Portal" />}>
+                <Route path="dashboard" element={<FacultyDashboardPage />} />
+                <Route path="tasks" element={<MyTasksPage />} />
+                <Route path="department-leaderboard" element={<DepartmentLeaderboardPage />} />
                 <Route path="leaderboard" element={<StaffLeaderboardPage />} />
+                <Route path="events/reports" element={<EventReportsListPage />} />
+                <Route path="events/reports/new" element={<EventReportFormPage />} />
+                <Route path="events/reports/:id" element={<EventReportFormPage />} />
+                <Route path="announcements" element={<AnnouncementsPage />} />
+                <Route path="queries" element={<QueriesPage />} />
                 <Route path="*" element={<Navigate to="dashboard" replace />} />
               </Route>
 

@@ -65,3 +65,7 @@ def require_role(allowed_roles: List[UserRole]):
             )
         return current_user
     return role_checker
+
+get_current_active_user = get_current_user
+get_current_super_admin = require_role([UserRole.super_admin])
+

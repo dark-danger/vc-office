@@ -9,6 +9,7 @@ def utc_now():
 
 class UserRole(str, enum.Enum):
     super_admin = "super_admin"
+    department_head = "department_head"
     faculty = "faculty"
     student = "student"
 
@@ -51,6 +52,25 @@ class DynamicFormPurpose(str, enum.Enum):
     custom = "Custom Form"
 
 
+# 0. DEPARTMENT MODEL
+class Department(Base):
+    __tablename__ = "departments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(150), unique=True, index=True, nullable=False)
+    code: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
+    category: Mapped[str] = mapped_column(String(50), default="academic", index=True) # academic / administrative
+    head_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    points: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    head = relationship("User", foreign_keys=[head_id])
+    members = relationship("User", back_populates="dept", foreign_keys="User.department_id")
+
+
 # 1. USER MODEL
 class User(Base):
     __tablename__ = "users"
@@ -60,14 +80,15 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     phone: Mapped[str] = mapped_column(String(30), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.student, nullable=False)
+    role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.faculty, nullable=False)
     
-    # Faculty specific fields
+    # Department & Staff fields
+    department_id: Mapped[int] = mapped_column(ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True)
     department: Mapped[str] = mapped_column(String(100), nullable=True)
     designation: Mapped[str] = mapped_column(String(100), nullable=True)
-    employee_id: Mapped[str] = mapped_column(String(50), nullable=True)
+    employee_id: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=True)
     
-    # Student specific fields
+    # Student specific fields (legacy compatibility)
     roll_number: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=True)
     course_branch: Mapped[str] = mapped_column(String(100), nullable=True)
     year: Mapped[str] = mapped_column(String(20), nullable=True)
@@ -77,6 +98,8 @@ class User(Base):
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    dept = relationship("Department", foreign_keys=[department_id], back_populates="members")
 
 
 # 2. EVENT MODEL
@@ -111,8 +134,15 @@ class Task(Base):
     task_type: Mapped[str] = mapped_column(String(50), default="standalone") # standalone / event_linked
     event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="SET NULL"), nullable=True, index=True)
     parent_task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True, index=True)
+    
+    # Hierarchy & Targeting
+    department_id: Mapped[int] = mapped_column(ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True)
+    target_scope: Mapped[str] = mapped_column(String(50), default="individual") # individual, department_head, entire_department
     assigned_to: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     assigned_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    assigned_by_role: Mapped[str] = mapped_column(String(50), default="super_admin") # super_admin, department_head
+    points_reward: Mapped[int] = mapped_column(Integer, default=10)
+    
     start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     due_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     priority: Mapped[TaskPriority] = mapped_column(Enum(TaskPriority), default=TaskPriority.medium)
@@ -120,6 +150,7 @@ class Task(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
+    department = relationship("Department", foreign_keys=[department_id])
     event = relationship("Event", back_populates="tasks")
     assignee = relationship("User", foreign_keys=[assigned_to])
     assigner = relationship("User", foreign_keys=[assigned_by])

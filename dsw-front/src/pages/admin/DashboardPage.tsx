@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../../lib/api';
 import {
   Users, Calendar, CheckSquare, Megaphone, HelpCircle, FileText,
-  MessageSquareHeart, Trophy, Activity, TrendingUp, AlertCircle, CheckCircle2, Clock
+  MessageSquareHeart, Trophy, Activity, TrendingUp, AlertCircle, CheckCircle2, Clock, Building2
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -107,7 +107,20 @@ export const AdminDashboardPage: React.FC = () => {
       </div>
 
       {/* Top KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="glass-card p-5 border-l-4 border-l-teal-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-[var(--text-muted)]">Departments</p>
+              <h3 className="text-2xl font-black text-[var(--text-primary)] mt-1">15</h3>
+            </div>
+            <div className="p-3 bg-teal-500/10 rounded-xl text-teal-400">
+              <Building2 className="w-6 h-6" />
+            </div>
+          </div>
+          <p className="text-[11px] text-teal-400 font-bold mt-3">10 Academic • 5 Non-Teaching</p>
+        </div>
+
         <div className="glass-card p-5 border-l-4 border-l-[#0e8a6e]">
           <div className="flex items-center justify-between">
             <div>
@@ -121,13 +134,13 @@ export const AdminDashboardPage: React.FC = () => {
           <p className="text-[11px] text-[var(--text-muted)] mt-3">Total registered staff members</p>
         </div>
 
-        <div className="glass-card p-5 border-l-4 border-l-teal-500">
+        <div className="glass-card p-5 border-l-4 border-l-amber-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-[var(--text-muted)]">Active Tasks</p>
               <h3 className="text-2xl font-black text-[var(--text-primary)] mt-1">{summary.total_tasks}</h3>
             </div>
-            <div className="p-3 bg-teal-500/10 rounded-xl text-teal-500">
+            <div className="p-3 bg-amber-500/10 rounded-xl text-amber-500">
               <CheckSquare className="w-6 h-6" />
             </div>
           </div>

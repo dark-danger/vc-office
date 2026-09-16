@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, inspect
+from sqlalchemy import select, inspect, or_
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 from app.database import get_db
 from app.core.deps import get_current_user, require_role
-from app.models.all_models import User, UserRole, Task, TaskSubmission, TaskStatus, FacultyPerformanceLedger, Event
+from app.models.all_models import User, UserRole, Task, TaskSubmission, TaskStatus, FacultyPerformanceLedger, Event, Department
 from app.schemas.schemas import TaskCreate, TaskUpdate, TaskOut, TaskSubmissionCreate, TaskReviewPayload
 from app.core.scoring_rules import calculate_faculty_task_score, FACULTY_SCORE_DECLINED
 from app.services.notification_service import create_notification, log_audit
@@ -52,6 +52,10 @@ def build_task_out(t: Task) -> TaskOut:
     if "assignee" not in state.unloaded and t.assignee:
         assignee_val = t.assignee
 
+    dept_name = None
+    if "department" not in state.unloaded and getattr(t, "department", None):
+        dept_name = t.department.name
+
     return TaskOut(
         id=t.id,
         title=t.title,
@@ -60,6 +64,11 @@ def build_task_out(t: Task) -> TaskOut:
         event_id=t.event_id,
         event_title=event_title,
         parent_task_id=t.parent_task_id,
+        department_id=getattr(t, "department_id", None),
+        department_name=dept_name,
+        target_scope=getattr(t, "target_scope", "individual") or "individual",
+        assigned_by_role=getattr(t, "assigned_by_role", "super_admin") or "super_admin",
+        points_reward=getattr(t, "points_reward", 10) or 10,
         assigned_to=t.assigned_to,
         assignee=assignee_val,
         assigned_by=t.assigned_by,
@@ -75,7 +84,7 @@ def build_task_out(t: Task) -> TaskOut:
 @router.post("", response_model=TaskOut)
 async def create_task(
     payload: TaskCreate,
-    current_user: User = Depends(require_role([UserRole.super_admin, UserRole.faculty])),
+    current_user: User = Depends(require_role([UserRole.super_admin, UserRole.department_head, UserRole.faculty])),
     db: AsyncSession = Depends(get_db)
 ):
     parent_task = None
@@ -85,8 +94,8 @@ async def create_task(
         if not parent_task:
             raise HTTPException(status_code=404, detail="Parent task not found")
 
+    # --- 1. FACULTY ROLE ---
     if current_user.role == UserRole.faculty:
-        # Faculty creating their own task proposal/duty or subtask
         if parent_task:
             if parent_task.assigned_to != current_user.id:
                 raise HTTPException(status_code=403, detail="You can only add subtasks to tasks assigned to you")
@@ -94,7 +103,6 @@ async def create_task(
             event_id = payload.event_id if payload.event_id is not None else parent_task.event_id
             task_type = "subtask"
         else:
-            # Enforce 1 self-created task per 24 hours rate limit
             now_utc = datetime.now(timezone.utc)
             twenty_four_hours_ago = now_utc - timedelta(hours=24)
             last_self_res = await db.execute(
@@ -128,7 +136,7 @@ async def create_task(
             task_type = payload.task_type or "self_created"
 
         assigned_by = current_user.id
-        initial_status = TaskStatus.submitted # Self-created tasks/subtasks require admin approval
+        initial_status = TaskStatus.submitted
 
         task = Task(
             title=payload.title,
@@ -136,6 +144,10 @@ async def create_task(
             task_type=task_type,
             event_id=event_id,
             parent_task_id=payload.parent_task_id,
+            department_id=current_user.department_id,
+            target_scope="individual",
+            assigned_by_role="faculty",
+            points_reward=payload.points_reward or 10,
             assigned_to=assigned_to,
             assigned_by=assigned_by,
             start_date=payload.start_date,
@@ -144,9 +156,8 @@ async def create_task(
             status=initial_status
         )
         db.add(task)
-        await db.flush() # obtain task.id
+        await db.flush()
 
-        # Attach initial submission record if file or description is provided
         submission = TaskSubmission(
             task_id=task.id,
             submitted_by=current_user.id,
@@ -165,6 +176,7 @@ async def create_task(
             select(Task)
             .options(
                 selectinload(Task.assignee),
+                selectinload(Task.department),
                 selectinload(Task.event),
                 selectinload(Task.submissions).selectinload(TaskSubmission.submitter),
                 selectinload(Task.subtasks).selectinload(Task.assignee),
@@ -175,100 +187,248 @@ async def create_task(
         )
         created_task = res.scalar_one()
 
-        # Notify Super Admins
-        item_kind = "Subtask" if parent_task else "Faculty Task"
+        # Notify VC Office
         admin_res = await db.execute(select(User).where(User.role == UserRole.super_admin))
         admins = admin_res.scalars().all()
         for admin in admins:
             await create_notification(
                 db,
-                title=f"New {item_kind} Request 📋",
-                body=f"Faculty {current_user.name} submitted {item_kind.lower()}: '{task.title}' for approval",
+                title=f"New Task Request 📋",
+                body=f"Faculty {current_user.name} submitted task: '{task.title}' for approval",
                 type="task_request",
                 user_id=admin.id,
                 link="/admin/requests"
             )
 
-        await log_audit(db, action="CREATE_FACULTY_TASK_REQUEST", entity_type="task", actor_id=current_user.id, entity_id=task.id, meta={"title": task.title, "faculty": current_user.name, "parent_task_id": payload.parent_task_id})
+        if current_user.department_id:
+            dept_res = await db.execute(select(Department).where(Department.id == current_user.department_id))
+            dept = dept_res.scalar_one_or_none()
+            if dept and dept.head_id and dept.head_id != current_user.id:
+                await create_notification(
+                    db,
+                    title=f"Faculty Task Submitted 📋",
+                    body=f"Department faculty {current_user.name} submitted task: '{task.title}'",
+                    type="task_request",
+                    user_id=dept.head_id,
+                    link="/head/tasks"
+                )
+
+        await log_audit(db, action="CREATE_FACULTY_TASK_REQUEST", entity_type="task", actor_id=current_user.id, entity_id=task.id, meta={"title": task.title, "faculty": current_user.name})
         await db.commit()
 
         ttl_cache.invalidate("dashboard_")
         ttl_cache.invalidate("lb_staff_")
+        ttl_cache.invalidate("dept_leaderboard")
 
         return build_task_out(created_task)
 
-    # Admin creating task or subtask assigned to faculty
-    if parent_task:
-        # Strict Rule: Subtask is strictly locked to the parent task assignee
-        assigned_to = parent_task.assigned_to
-        event_id = payload.event_id if payload.event_id is not None else parent_task.event_id
-        task_type = "subtask"
-    else:
-        if not payload.assigned_to:
-            raise HTTPException(status_code=400, detail="Assigned faculty member must be specified")
-        assigned_to = payload.assigned_to
-        event_id = payload.event_id
-        task_type = payload.task_type or "standalone"
+    # --- 2. DEPARTMENT HEAD ROLE ---
+    elif current_user.role == UserRole.department_head:
+        dept_id = current_user.department_id
+        if not dept_id:
+            dept_res = await db.execute(select(Department).where(Department.head_id == current_user.id))
+            dept = dept_res.scalar_one_or_none()
+            if dept:
+                dept_id = dept.id
+        
+        # If head is assigning to a faculty member
+        if payload.assigned_to and payload.assigned_to != current_user.id:
+            fac_res = await db.execute(
+                select(User).where(User.id == payload.assigned_to, User.role == UserRole.faculty)
+            )
+            faculty = fac_res.scalar_one_or_none()
+            if not faculty:
+                raise HTTPException(status_code=400, detail="Assigned user must be a registered faculty member")
+            
+            task = Task(
+                title=payload.title,
+                description=payload.description,
+                task_type=payload.task_type or "department_delegation",
+                event_id=payload.event_id,
+                parent_task_id=payload.parent_task_id,
+                department_id=dept_id,
+                target_scope="faculty",
+                assigned_by_role="department_head",
+                points_reward=payload.points_reward or 10,
+                assigned_to=faculty.id,
+                assigned_by=current_user.id,
+                start_date=payload.start_date,
+                due_date=payload.due_date,
+                priority=payload.priority,
+                status=TaskStatus.pending
+            )
+            db.add(task)
+            await db.commit()
 
-    fac_res = await db.execute(select(User).where(User.id == assigned_to, User.role == UserRole.faculty))
-    faculty = fac_res.scalar_one_or_none()
-    if not faculty:
-        raise HTTPException(status_code=400, detail="Assigned user must be a registered faculty member")
+            await create_notification(
+                db,
+                title=f"New Task from Department Head 📋",
+                body=f"HOD {current_user.name} assigned you: '{task.title}'",
+                type="task_assigned",
+                user_id=faculty.id,
+                link="/faculty/tasks"
+            )
+            await log_audit(db, action="HOD_DELEGATE_TASK", entity_type="task", actor_id=current_user.id, entity_id=task.id, meta={"title": task.title, "assignee": faculty.name})
+            await db.commit()
 
-    task = Task(
-        title=payload.title,
-        description=payload.description,
-        task_type=task_type,
-        event_id=event_id,
-        parent_task_id=payload.parent_task_id,
-        assigned_to=assigned_to,
-        assigned_by=current_user.id,
-        start_date=payload.start_date,
-        due_date=payload.due_date,
-        priority=payload.priority,
-        status=TaskStatus.pending
-    )
-    db.add(task)
-    await db.commit()
+        else:
+            # Department Head submitting a departmental deliverable / proposal to VC Office
+            task = Task(
+                title=payload.title,
+                description=payload.description,
+                task_type=payload.task_type or "department_deliverable",
+                event_id=payload.event_id,
+                parent_task_id=payload.parent_task_id,
+                department_id=dept_id,
+                target_scope="department",
+                assigned_by_role="department_head",
+                points_reward=payload.points_reward or 15,
+                assigned_to=current_user.id,
+                assigned_by=current_user.id,
+                start_date=payload.start_date,
+                due_date=payload.due_date,
+                priority=payload.priority,
+                status=TaskStatus.submitted
+            )
+            db.add(task)
+            await db.flush()
 
-    # Re-query task with relations
-    res = await db.execute(
-        select(Task)
-        .options(
-            selectinload(Task.assignee),
-            selectinload(Task.event),
-            selectinload(Task.submissions),
-            selectinload(Task.subtasks).selectinload(Task.assignee),
-            selectinload(Task.subtasks).selectinload(Task.event),
-            selectinload(Task.subtasks).selectinload(Task.submissions)
+            if payload.file_url or payload.description:
+                submission = TaskSubmission(
+                    task_id=task.id,
+                    submitted_by=current_user.id,
+                    description=payload.description or "Department deliverable submission",
+                    file_url=payload.file_url,
+                    file_name=payload.file_name,
+                    file_type=payload.file_type,
+                    file_size=payload.file_size,
+                    review_status="pending"
+                )
+                db.add(submission)
+            await db.commit()
+
+            # Notify VC Admins
+            admin_res = await db.execute(select(User).where(User.role == UserRole.super_admin))
+            admins = admin_res.scalars().all()
+            for admin in admins:
+                await create_notification(
+                    db,
+                    title=f"New Department Deliverable 🏛️",
+                    body=f"HOD {current_user.name} submitted: '{task.title}' for VC Office review",
+                    type="task_request",
+                    user_id=admin.id,
+                    link="/admin/requests"
+                )
+            await db.commit()
+
+        # Re-query task with relations
+        res = await db.execute(
+            select(Task)
+            .options(
+                selectinload(Task.assignee),
+                selectinload(Task.department),
+                selectinload(Task.event),
+                selectinload(Task.submissions).selectinload(TaskSubmission.submitter),
+                selectinload(Task.subtasks).selectinload(Task.assignee),
+                selectinload(Task.subtasks).selectinload(Task.event),
+                selectinload(Task.subtasks).selectinload(Task.submissions)
+            )
+            .where(Task.id == task.id)
         )
-        .where(Task.id == task.id)
-    )
-    created_task = res.scalar_one()
+        created_task = res.scalar_one()
 
-    # Send Notification to faculty
-    item_name = "subtask" if payload.parent_task_id else "task"
-    await create_notification(
-        db,
-        title=f"New {item_name.title()} Assigned",
-        body=f"You have been assigned {item_name}: '{task.title}'",
-        type="task_assigned",
-        user_id=faculty.id,
-        link="/faculty/tasks"
-    )
-    await log_audit(db, action="CREATE_TASK", entity_type="task", actor_id=current_user.id, entity_id=task.id, meta={"title": task.title, "assignee": faculty.name, "parent_task_id": payload.parent_task_id})
-    await db.commit()
+        ttl_cache.invalidate("dashboard_")
+        ttl_cache.invalidate("lb_staff_")
+        ttl_cache.invalidate("dept_leaderboard")
+        return build_task_out(created_task)
 
-    ttl_cache.invalidate("dashboard_")
-    ttl_cache.invalidate("lb_staff_")
+    # --- 3. SUPER ADMIN (VC OFFICE) ---
+    else:
+        assigned_to = payload.assigned_to
+        dept_id = payload.department_id
 
-    return build_task_out(created_task)
+        if dept_id and not assigned_to:
+            dept_res = await db.execute(select(Department).where(Department.id == dept_id))
+            dept = dept_res.scalar_one_or_none()
+            if dept and dept.head_id:
+                assigned_to = dept.head_id
+            elif dept:
+                fac_res = await db.execute(select(User).where(User.department_id == dept_id).limit(1))
+                any_user = fac_res.scalar_one_or_none()
+                if any_user:
+                    assigned_to = any_user.id
+
+        if not assigned_to:
+            raise HTTPException(status_code=400, detail="Assigned recipient (or target department with assigned Head/Faculty) must be specified")
+
+        target_user_res = await db.execute(select(User).where(User.id == assigned_to))
+        target_user = target_user_res.scalar_one_or_none()
+        if not target_user:
+            raise HTTPException(status_code=400, detail="Assigned user not found")
+
+        if not dept_id and target_user.department_id:
+            dept_id = target_user.department_id
+
+        task = Task(
+            title=payload.title,
+            description=payload.description,
+            task_type=payload.task_type or "standalone",
+            event_id=payload.event_id,
+            parent_task_id=payload.parent_task_id,
+            department_id=dept_id,
+            target_scope=payload.target_scope or ("department" if target_user.role == UserRole.department_head else "individual"),
+            assigned_by_role="super_admin",
+            points_reward=payload.points_reward or 10,
+            assigned_to=assigned_to,
+            assigned_by=current_user.id,
+            start_date=payload.start_date,
+            due_date=payload.due_date,
+            priority=payload.priority,
+            status=TaskStatus.pending
+        )
+        db.add(task)
+        await db.commit()
+
+        # Re-query task with relations
+        res = await db.execute(
+            select(Task)
+            .options(
+                selectinload(Task.assignee),
+                selectinload(Task.department),
+                selectinload(Task.event),
+                selectinload(Task.submissions),
+                selectinload(Task.subtasks).selectinload(Task.assignee),
+                selectinload(Task.subtasks).selectinload(Task.event),
+                selectinload(Task.subtasks).selectinload(Task.submissions)
+            )
+            .where(Task.id == task.id)
+        )
+        created_task = res.scalar_one()
+
+        dest_route = "/head/tasks" if target_user.role == UserRole.department_head else "/faculty/tasks"
+        await create_notification(
+            db,
+            title=f"New Task from VC Office 🏛️",
+            body=f"You have been assigned: '{task.title}'",
+            type="task_assigned",
+            user_id=target_user.id,
+            link=dest_route
+        )
+        await log_audit(db, action="VC_CREATE_TASK", entity_type="task", actor_id=current_user.id, entity_id=task.id, meta={"title": task.title, "assignee": target_user.name, "dept_id": dept_id})
+        await db.commit()
+
+        ttl_cache.invalidate("dashboard_")
+        ttl_cache.invalidate("lb_staff_")
+        ttl_cache.invalidate("dept_leaderboard")
+
+        return build_task_out(created_task)
 
 
 @router.get("/requests", response_model=List[TaskOut])
 async def list_task_requests(
     status_filter: Optional[str] = None,
     type_filter: Optional[str] = None,
+    department_id: Optional[int] = None,
     faculty_id: Optional[int] = None,
     faculty_name: Optional[str] = None,
     event_id: Optional[int] = None,
@@ -276,17 +436,34 @@ async def list_task_requests(
     to_date: Optional[str] = None,
     priority: Optional[str] = None,
     search: Optional[str] = None,
-    current_user: User = Depends(require_role([UserRole.super_admin])),
+    current_user: User = Depends(require_role([UserRole.super_admin, UserRole.department_head])),
     db: AsyncSession = Depends(get_db)
 ):
     query = select(Task).options(
         selectinload(Task.assignee),
+        selectinload(Task.department),
         selectinload(Task.event),
         selectinload(Task.submissions).selectinload(TaskSubmission.submitter),
         selectinload(Task.subtasks).selectinload(Task.assignee),
         selectinload(Task.subtasks).selectinload(Task.event),
         selectinload(Task.subtasks).selectinload(Task.submissions).selectinload(TaskSubmission.submitter)
     )
+
+    if current_user.role == UserRole.department_head:
+        # Dept head sees requests from their department faculties or tasks they assigned
+        dept_id = current_user.department_id
+        if not dept_id:
+            dept_res = await db.execute(select(Department).where(Department.head_id == current_user.id))
+            dept = dept_res.scalar_one_or_none()
+            if dept:
+                dept_id = dept.id
+        
+        if dept_id:
+            query = query.where(or_(Task.department_id == dept_id, Task.assigned_by == current_user.id))
+        else:
+            query = query.where(Task.assigned_by == current_user.id)
+    elif department_id:
+        query = query.where(Task.department_id == department_id)
 
     if faculty_id:
         query = query.where(Task.assigned_to == faculty_id)
@@ -342,6 +519,7 @@ async def list_task_requests(
 @router.get("", response_model=List[TaskOut])
 async def list_tasks(
     assigned_to: Optional[int] = None,
+    department_id: Optional[int] = None,
     status_filter: Optional[str] = None,
     event_id: Optional[int] = None,
     from_date: Optional[str] = None,
@@ -353,6 +531,7 @@ async def list_tasks(
 ):
     query = select(Task).options(
         selectinload(Task.assignee),
+        selectinload(Task.department),
         selectinload(Task.event),
         selectinload(Task.submissions).selectinload(TaskSubmission.submitter),
         selectinload(Task.subtasks).selectinload(Task.assignee),
@@ -362,8 +541,37 @@ async def list_tasks(
 
     if current_user.role == UserRole.faculty:
         query = query.where(Task.assigned_to == current_user.id)
-    elif assigned_to:
-        query = query.where(Task.assigned_to == assigned_to)
+    elif current_user.role == UserRole.department_head:
+        dept_id = current_user.department_id
+        if not dept_id:
+            dept_res = await db.execute(select(Department).where(Department.head_id == current_user.id))
+            dept = dept_res.scalar_one_or_none()
+            if dept:
+                dept_id = dept.id
+        
+        if dept_id:
+            query = query.where(
+                or_(
+                    Task.assigned_to == current_user.id,
+                    Task.assigned_by == current_user.id,
+                    Task.department_id == dept_id
+                )
+            )
+        else:
+            query = query.where(
+                or_(
+                    Task.assigned_to == current_user.id,
+                    Task.assigned_by == current_user.id
+                )
+            )
+        if assigned_to:
+            query = query.where(Task.assigned_to == assigned_to)
+    else:
+        # Super Admin
+        if assigned_to:
+            query = query.where(Task.assigned_to == assigned_to)
+        if department_id:
+            query = query.where(Task.department_id == department_id)
 
     if status_filter:
         query = query.where(Task.status == status_filter)
@@ -392,20 +600,20 @@ async def list_tasks(
     result = await db.execute(query.order_by(Task.created_at.desc()))
     tasks = result.scalars().all()
 
-    # Filter top-level tasks if viewing list, subtasks attached inside
     top_tasks = [t for t in tasks if t.parent_task_id is None] if not search else tasks
     return [build_task_out(t) for t in top_tasks]
 
 
 @router.get("/mine", response_model=List[TaskOut])
 async def get_my_tasks(
-    current_user: User = Depends(require_role([UserRole.faculty])),
+    current_user: User = Depends(require_role([UserRole.faculty, UserRole.department_head])),
     db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(
         select(Task)
         .options(
-            selectinload(Task.assignee), 
+            selectinload(Task.assignee),
+            selectinload(Task.department),
             selectinload(Task.event), 
             selectinload(Task.submissions).selectinload(TaskSubmission.submitter),
             selectinload(Task.subtasks).selectinload(Task.assignee),
@@ -480,6 +688,7 @@ async def get_task_detail(
         select(Task)
         .options(
             selectinload(Task.assignee),
+            selectinload(Task.department),
             selectinload(Task.event),
             selectinload(Task.submissions).selectinload(TaskSubmission.submitter),
             selectinload(Task.subtasks).selectinload(Task.assignee),
@@ -501,7 +710,7 @@ async def get_task_detail(
 async def submit_task(
     task_id: int,
     payload: TaskSubmissionCreate,
-    current_user: User = Depends(require_role([UserRole.faculty])),
+    current_user: User = Depends(require_role([UserRole.faculty, UserRole.department_head])),
     db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(select(Task).where(Task.id == task_id))
@@ -526,7 +735,7 @@ async def submit_task(
     task.status = TaskStatus.submitted
     await db.commit()
 
-    # Notify admin
+    # If submitted by Faculty, notify Department Head (if any) and Super Admin
     admin_res = await db.execute(select(User).where(User.role == UserRole.super_admin))
     admins = admin_res.scalars().all()
     item_type = "Subtask" if task.parent_task_id else "Task"
@@ -534,11 +743,24 @@ async def submit_task(
         await create_notification(
             db,
             title=f"{item_type} Submitted for Review 📋",
-            body=f"Faculty {current_user.name} submitted {item_type.lower()}: '{task.title}'",
+            body=f"{current_user.name} submitted {item_type.lower()}: '{task.title}'",
             type="task_submitted",
             user_id=admin.id,
             link="/admin/requests"
         )
+
+    if current_user.role == UserRole.faculty and current_user.department_id:
+        dept_res = await db.execute(select(Department).where(Department.id == current_user.department_id))
+        dept = dept_res.scalar_one_or_none()
+        if dept and dept.head_id:
+            await create_notification(
+                db,
+                title=f"Faculty Task Submitted 📋",
+                body=f"Faculty {current_user.name} submitted: '{task.title}'",
+                type="task_submitted",
+                user_id=dept.head_id,
+                link="/head/tasks"
+            )
 
     await log_audit(db, action="SUBMIT_TASK", entity_type="task", actor_id=current_user.id, entity_id=task.id)
     await db.commit()
@@ -549,7 +771,7 @@ async def submit_task(
 async def approve_task(
     task_id: int,
     payload: Optional[TaskReviewPayload] = None,
-    current_user: User = Depends(require_role([UserRole.super_admin])),
+    current_user: User = Depends(require_role([UserRole.super_admin, UserRole.department_head])),
     db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(
@@ -558,6 +780,17 @@ async def approve_task(
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+
+    # If Department Head is approving, verify permission
+    if current_user.role == UserRole.department_head:
+        dept_id = current_user.department_id
+        if not dept_id:
+            dept_res = await db.execute(select(Department).where(Department.head_id == current_user.id))
+            dept = dept_res.scalar_one_or_none()
+            if dept:
+                dept_id = dept.id
+        if task.assigned_by != current_user.id and task.department_id != dept_id:
+            raise HTTPException(status_code=403, detail="You can only approve tasks within your department")
 
     now = datetime.now(timezone.utc)
     is_late = bool(task.due_date and task.due_date.tzinfo is None and task.due_date < now.replace(tzinfo=None)) or \
@@ -573,41 +806,57 @@ async def approve_task(
         sub.review_status = "approved"
         sub.reviewed_by = current_user.id
         sub.reviewed_at = now
-        sub.review_remarks = payload.review_remarks if payload else "Approved by Admin"
+        sub.review_remarks = payload.review_remarks if payload else f"Approved by {current_user.name}"
     else:
         sub = TaskSubmission(
             task_id=task.id,
             submitted_by=task.assigned_to,
-            description=task.description or "Approved by Admin",
+            description=task.description or "Approved",
             review_status="approved",
             reviewed_by=current_user.id,
             reviewed_at=now,
-            review_remarks=payload.review_remarks if payload else "Approved by Admin"
+            review_remarks=payload.review_remarks if payload else f"Approved by {current_user.name}"
         )
         db.add(sub)
 
     is_subtask = (task.parent_task_id is not None)
-    score_delta = 0 if is_subtask else calculate_faculty_task_score(is_late)
+    base_score = calculate_faculty_task_score(is_late)
+    score_delta = 0 if is_subtask else (task.points_reward if getattr(task, "points_reward", None) else base_score)
 
-    # Faculty Performance Ledger Entry (+10 for on-time, +5 for late ONLY on main tasks; subtasks award +0)
-    if not already_approved and not is_subtask:
+    # Faculty Performance Ledger Entry
+    if not already_approved and not is_subtask and task.assigned_to:
         ledger_entry = FacultyPerformanceLedger(
             faculty_id=task.assigned_to,
             score_delta=score_delta,
             source_type="task_approved",
             source_id=task.id,
-            note=f"Approved on-time (+10)" if not is_late else "Approved late (+5)"
+            note=f"Approved on-time (+{score_delta})" if not is_late else f"Approved late (+{score_delta})"
         )
         db.add(ledger_entry)
-        await db.commit()
 
-    # Notify faculty member
+    # Credit Department Points
+    dept_id = task.department_id
+    if not dept_id and task.assigned_to:
+        assignee_res = await db.execute(select(User).where(User.id == task.assigned_to))
+        u = assignee_res.scalar_one_or_none()
+        if u and u.department_id:
+            dept_id = u.department_id
+    
+    if dept_id and not already_approved and not is_subtask:
+        dept_res = await db.execute(select(Department).where(Department.id == dept_id))
+        dept = dept_res.scalar_one_or_none()
+        if dept:
+            dept.points += score_delta
+
+    await db.commit()
+
+    # Notify faculty member / assignee
     if is_subtask:
         notif_title = "Subtask Approved! 🎉"
-        notif_body = f"Your subtask '{task.title}' has been approved by VC Office."
+        notif_body = f"Your subtask '{task.title}' has been approved."
     else:
         notif_title = "Task Approved! 🎉"
-        notif_body = f"Your task submission for '{task.title}' has been approved by VC Office (+{score_delta} leaderboard pts)."
+        notif_body = f"Your task '{task.title}' has been approved (+{score_delta} points awarded)."
 
     await create_notification(
         db,
@@ -615,13 +864,14 @@ async def approve_task(
         body=notif_body,
         type="task_approved",
         user_id=task.assigned_to,
-        link=f"/faculty/tasks"
+        link=f"/faculty/tasks" if current_user.role == UserRole.super_admin else "/head/tasks"
     )
-    await log_audit(db, action="APPROVE_SUBTASK" if is_subtask else "APPROVE_TASK", entity_type="task", actor_id=current_user.id, entity_id=task.id, meta={"score_delta": score_delta, "is_subtask": is_subtask})
+    await log_audit(db, action="APPROVE_SUBTASK" if is_subtask else "APPROVE_TASK", entity_type="task", actor_id=current_user.id, entity_id=task.id, meta={"score_delta": score_delta, "is_subtask": is_subtask, "department_id": dept_id})
     await db.commit()
 
     ttl_cache.invalidate("dashboard_")
     ttl_cache.invalidate("lb_staff_")
+    ttl_cache.invalidate("dept_leaderboard")
 
     return await get_task_detail(task_id, current_user, db)
 
@@ -629,7 +879,7 @@ async def approve_task(
 async def decline_task(
     task_id: int,
     payload: TaskReviewPayload,
-    current_user: User = Depends(require_role([UserRole.super_admin])),
+    current_user: User = Depends(require_role([UserRole.super_admin, UserRole.department_head])),
     db: AsyncSession = Depends(get_db)
 ):
     if not payload.review_remarks or not payload.review_remarks.strip():
@@ -641,6 +891,16 @@ async def decline_task(
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+
+    if current_user.role == UserRole.department_head:
+        dept_id = current_user.department_id
+        if not dept_id:
+            dept_res = await db.execute(select(Department).where(Department.head_id == current_user.id))
+            dept = dept_res.scalar_one_or_none()
+            if dept:
+                dept_id = dept.id
+        if task.assigned_by != current_user.id and task.department_id != dept_id:
+            raise HTTPException(status_code=403, detail="You can only decline tasks within your department")
 
     now = datetime.now(timezone.utc)
     task.status = TaskStatus.declined
@@ -665,22 +925,23 @@ async def decline_task(
 
     is_subtask = (task.parent_task_id is not None)
 
-    # Faculty Performance Ledger Entry (-3 for decline on both tasks & subtasks)
-    ledger_entry = FacultyPerformanceLedger(
-        faculty_id=task.assigned_to,
-        score_delta=FACULTY_SCORE_DECLINED, # -3
-        source_type="subtask_declined" if is_subtask else "task_declined",
-        source_id=task.id,
-        note=f"Subtask declined by admin ({FACULTY_SCORE_DECLINED})" if is_subtask else f"Declined by admin ({FACULTY_SCORE_DECLINED})"
-    )
-    db.add(ledger_entry)
+    # Faculty Performance Ledger Entry (-3 for decline)
+    if task.assigned_to:
+        ledger_entry = FacultyPerformanceLedger(
+            faculty_id=task.assigned_to,
+            score_delta=FACULTY_SCORE_DECLINED,
+            source_type="subtask_declined" if is_subtask else "task_declined",
+            source_id=task.id,
+            note=f"Declined ({FACULTY_SCORE_DECLINED})"
+        )
+        db.add(ledger_entry)
     await db.commit()
 
     item_label = "subtask" if is_subtask else "task"
     await create_notification(
         db,
         title=f"{item_label.title()} Declined (-3 pts)",
-        body=f"Your {item_label} '{task.title}' was declined by VC Office (-3 pts penalty). Remark: '{payload.review_remarks}'",
+        body=f"Your {item_label} '{task.title}' was declined. Remark: '{payload.review_remarks}'",
         type="task_declined",
         user_id=task.assigned_to,
         link="/faculty/tasks"
@@ -690,6 +951,7 @@ async def decline_task(
 
     ttl_cache.invalidate("dashboard_")
     ttl_cache.invalidate("lb_staff_")
+    ttl_cache.invalidate("dept_leaderboard")
 
     return await get_task_detail(task_id, current_user, db)
 
@@ -697,7 +959,7 @@ async def decline_task(
 async def update_task(
     task_id: int,
     payload: TaskUpdate,
-    current_user: User = Depends(require_role([UserRole.super_admin])),
+    current_user: User = Depends(require_role([UserRole.super_admin, UserRole.department_head])),
     db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(select(Task).where(Task.id == task_id))
@@ -714,18 +976,11 @@ async def update_task(
         if parent_task and data["assigned_to"] != parent_task.assigned_to:
             raise HTTPException(status_code=400, detail="Subtask assignee is locked to the parent task assignee and cannot be changed independently.")
 
-    if "assigned_to" in data and data["assigned_to"] is not None:
-        fac_res = await db.execute(select(User).where(User.id == data["assigned_to"], User.role == UserRole.faculty))
-        faculty = fac_res.scalar_one_or_none()
-        if not faculty:
-            raise HTTPException(status_code=400, detail="Assigned user must be a registered faculty member")
-
     for key, value in data.items():
         setattr(task, key, value)
 
     await db.commit()
 
-    # If top-level task assignee was changed, cascade to all child subtasks
     if task.parent_task_id is None and "assigned_to" in data and data["assigned_to"] != old_assignee:
         from sqlalchemy import update
         await db.execute(
@@ -749,13 +1004,14 @@ async def update_task(
 
     ttl_cache.invalidate("dashboard_")
     ttl_cache.invalidate("lb_staff_")
+    ttl_cache.invalidate("dept_leaderboard")
 
     return await get_task_detail(task_id, current_user, db)
 
 @router.delete("/{task_id}")
 async def delete_task(
     task_id: int,
-    current_user: User = Depends(require_role([UserRole.super_admin])),
+    current_user: User = Depends(require_role([UserRole.super_admin, UserRole.department_head])),
     db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(select(Task).where(Task.id == task_id))
@@ -768,6 +1024,6 @@ async def delete_task(
 
     ttl_cache.invalidate("dashboard_")
     ttl_cache.invalidate("lb_staff_")
+    ttl_cache.invalidate("dept_leaderboard")
 
     return {"message": "Task deleted successfully"}
-

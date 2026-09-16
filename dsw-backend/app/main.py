@@ -13,7 +13,7 @@ from app.core.security import get_password_hash
 from app.database import AsyncSessionLocal, Base, engine
 from app.models.all_models import User, UserRole
 from app.routers import (
-    ai, announcements, auth, clubs, committees, dashboard, duty_charts,
+    ai, announcements, auth, clubs, committees, dashboard, departments, duty_charts,
     email, event_reports, events, feedback, forms, leaderboard_staff, leaderboard_student,
     notifications, queries, tasks, uploads, users,
 )
@@ -268,6 +268,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Mount all domain routers
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(departments.router)
 app.include_router(tasks.router)
 app.include_router(events.router)
 app.include_router(event_reports.router)

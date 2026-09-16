@@ -24,6 +24,7 @@ class UserOut(BaseModel):
     email: str
     phone: Optional[str] = None
     role: UserRole
+    department_id: Optional[int] = None
     department: Optional[str] = None
     designation: Optional[str] = None
     employee_id: Optional[str] = None
@@ -37,6 +38,57 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+# --- DEPARTMENT SCHEMAS ---
+class DepartmentOut(BaseModel):
+    id: int
+    name: str
+    code: str
+    category: str
+    head_id: Optional[int] = None
+    head: Optional[UserOut] = None
+    description: Optional[str] = None
+    points: int = 0
+    faculty_count: int = 0
+    completed_tasks_count: int = 0
+    pending_tasks_count: int = 0
+    is_active: bool = True
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class DepartmentHeadAssign(BaseModel):
+    head_id: int
+
+class BulkFacultyRow(BaseModel):
+    name: str
+    employee_id: str
+    designation: Optional[str] = "Assistant Professor"
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    department: Optional[str] = None
+
+class BulkFacultyRequest(BaseModel):
+    department_id: Optional[int] = None
+    faculty_list: List[BulkFacultyRow]
+
+class FacultyCredentialItem(BaseModel):
+    id: int
+    name: str
+    email: str
+    employee_id: str
+    designation: str
+    department: str
+    initial_password: str
+
+class BulkFacultyResponse(BaseModel):
+    success: bool
+    total_processed: int
+    created_count: int
+    skipped_count: int
+    created_accounts: List[FacultyCredentialItem]
+    errors: List[str] = []
 
 class FacultyCreate(BaseModel):
     name: str
@@ -93,7 +145,10 @@ class TaskCreate(BaseModel):
     task_type: Optional[str] = "standalone" # standalone / event_linked / self_created
     event_id: Optional[int] = None
     parent_task_id: Optional[int] = None
+    department_id: Optional[int] = None
+    target_scope: Optional[str] = "individual" # individual / department_head / entire_department
     assigned_to: Optional[int] = None
+    points_reward: Optional[int] = 10
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     priority: TaskPriority = TaskPriority.medium
@@ -107,6 +162,7 @@ class TaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     assigned_to: Optional[int] = None
+    department_id: Optional[int] = None
     event_id: Optional[int] = None
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
@@ -139,6 +195,11 @@ class TaskOut(BaseModel):
     event_id: Optional[int] = None
     event_title: Optional[str] = None
     parent_task_id: Optional[int] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
+    target_scope: Optional[str] = "individual"
+    assigned_by_role: Optional[str] = "super_admin"
+    points_reward: int = 10
     assigned_to: int
     assignee: Optional[UserOut] = None
     assigned_by: int

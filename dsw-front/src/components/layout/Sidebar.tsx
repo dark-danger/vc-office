@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard, Users, Calendar, CheckSquare, Megaphone,
   HelpCircle, FileText, MessageSquareHeart, Medal,
-  X, ClipboardCheck
+  X, ClipboardCheck, Building2, Trophy, Upload, ShieldCheck
 } from 'lucide-react';
 
 interface SidebarItem {
@@ -21,29 +21,58 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => {
   const { user } = useAuth();
 
+  // 1. VC Office (Super Admin) Navigation
   const adminNav: SidebarItem[] = [
-    { label: 'Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
-    { label: 'Requests', path: '/admin/requests', icon: <ClipboardCheck className="w-4 h-4 text-amber-400" /> },
-    { label: 'Faculty Management', path: '/admin/faculty', icon: <Users className="w-4 h-4" /> },
+    { label: 'VC Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { label: 'Departments & HODs', path: '/admin/departments', icon: <Building2 className="w-4 h-4 text-teal-400" /> },
+    { label: 'Dept Leaderboard', path: '/admin/department-leaderboard', icon: <Trophy className="w-4 h-4 text-amber-400" /> },
+    { label: 'Approvals & Requests', path: '/admin/requests', icon: <ClipboardCheck className="w-4 h-4 text-amber-400" /> },
+    { label: 'Task Directives', path: '/admin/tasks', icon: <CheckSquare className="w-4 h-4" /> },
+    { label: 'Staff Leaderboard', path: '/admin/leaderboard/staff', icon: <Medal className="w-4 h-4 text-emerald-400" /> },
+    { label: 'Faculty Directory', path: '/admin/faculty', icon: <Users className="w-4 h-4" /> },
     { label: 'Events & Calendar', path: '/admin/events', icon: <Calendar className="w-4 h-4" /> },
     { label: 'Official Event Reports', path: '/admin/events/reports', icon: <FileText className="w-4 h-4 text-amber-400" /> },
-    { label: 'Task Assignment', path: '/admin/tasks', icon: <CheckSquare className="w-4 h-4" /> },
     { label: 'Announcements', path: '/admin/announcements', icon: <Megaphone className="w-4 h-4" /> },
     { label: 'Query Inbox', path: '/admin/queries', icon: <HelpCircle className="w-4 h-4" /> },
     { label: 'Feedback Forms', path: '/admin/feedback', icon: <MessageSquareHeart className="w-4 h-4" /> },
-    { label: 'Staff Leaderboard', path: '/admin/leaderboard/staff', icon: <Medal className="w-4 h-4 text-emerald-400" /> },
   ];
 
+  // 2. Department Head Navigation
+  const headNav: SidebarItem[] = [
+    { label: 'HOD Dashboard', path: '/head/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { label: 'Department Tasks & VC Directives', path: '/head/tasks', icon: <CheckSquare className="w-4 h-4 text-emerald-400" /> },
+    { label: 'Department Faculty & CSV', path: '/head/faculty', icon: <Users className="w-4 h-4 text-blue-400" /> },
+    { label: 'Dept Leaderboard', path: '/head/department-leaderboard', icon: <Trophy className="w-4 h-4 text-amber-400" /> },
+    { label: 'Staff Leaderboard', path: '/head/leaderboard', icon: <Medal className="w-4 h-4 text-emerald-400" /> },
+    { label: 'Official Event Reports', path: '/head/events/reports', icon: <FileText className="w-4 h-4 text-amber-400" /> },
+    { label: 'Announcements', path: '/head/announcements', icon: <Megaphone className="w-4 h-4" /> },
+    { label: 'Department Queries', path: '/head/queries', icon: <HelpCircle className="w-4 h-4" /> },
+  ];
+
+  // 3. Faculty Member Navigation
   const facultyNav: SidebarItem[] = [
     { label: 'My Dashboard', path: '/faculty/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
-    { label: 'Official Event Reports', path: '/faculty/events/reports', icon: <FileText className="w-4 h-4 text-amber-400" /> },
     { label: 'My Assigned Tasks', path: '/faculty/tasks', icon: <CheckSquare className="w-4 h-4" /> },
+    { label: 'Official Event Reports', path: '/faculty/events/reports', icon: <FileText className="w-4 h-4 text-amber-400" /> },
+    { label: 'Dept Leaderboard', path: '/faculty/department-leaderboard', icon: <Trophy className="w-4 h-4 text-amber-400" /> },
+    { label: 'Staff Leaderboard', path: '/faculty/leaderboard', icon: <Medal className="w-4 h-4 text-emerald-400" /> },
     { label: 'Announcements', path: '/faculty/announcements', icon: <Megaphone className="w-4 h-4" /> },
     { label: 'Raise Query', path: '/faculty/queries', icon: <HelpCircle className="w-4 h-4" /> },
-    { label: 'Staff Leaderboard', path: '/faculty/leaderboard', icon: <Medal className="w-4 h-4 text-emerald-400" /> },
   ];
 
-  const navItems = user?.role === 'super_admin' ? adminNav : facultyNav;
+  const navItems =
+    user?.role === 'super_admin'
+      ? adminNav
+      : user?.role === 'department_head'
+      ? headNav
+      : facultyNav;
+
+  const roleLabel =
+    user?.role === 'super_admin'
+      ? 'VC Office Admin'
+      : user?.role === 'department_head'
+      ? 'Department Head'
+      : 'Faculty Member';
 
   return (
     <aside
@@ -101,7 +130,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
       <div className="p-4 border-t border-[var(--panel-border)] bg-transparent flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[11px] font-semibold text-[var(--text-secondary)] capitalize">{user?.role?.replace('_', ' ')}</span>
+          <span className="text-[11px] font-semibold text-[var(--text-secondary)]">{roleLabel}</span>
         </div>
         <span className="text-[10px] text-[var(--text-muted)] font-mono">v1.0 Live</span>
       </div>

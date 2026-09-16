@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../lib/api';
-import { ArrowRight, Lock, Mail, Sparkles, ArrowLeft, LogIn } from 'lucide-react';
+import { ArrowRight, Lock, Mail, Sparkles, ArrowLeft, LogIn, ShieldCheck, Building2, User } from 'lucide-react';
 import { ThemeToggle } from '../components/common/ThemeToggle';
 
 export const LoginPage: React.FC = () => {
@@ -13,6 +13,22 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('Admin@12345');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<'admin' | 'head' | 'faculty'>('admin');
+
+  const setRolePreset = (role: 'admin' | 'head' | 'faculty') => {
+    setSelectedRole(role);
+    setError('');
+    if (role === 'admin') {
+      setEmail('admin@geeta.edu.in');
+      setPassword('Admin@12345');
+    } else if (role === 'head') {
+      setEmail('head.cse@geeta.edu.in');
+      setPassword('GU1001');
+    } else {
+      setEmail('faculty@geeta.edu.in');
+      setPassword('Faculty@12345');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,9 +39,11 @@ export const LoginPage: React.FC = () => {
       const data = await apiRequest('/auth/login', 'POST', { email, password });
       login(data.access_token, data.refresh_token, data.user);
 
-      // Auto-redirect based on authenticated user's role
+      // 3-Way Auto-redirect based on authenticated user's role
       if (data.user.role === 'super_admin') {
         navigate('/admin/dashboard');
+      } else if (data.user.role === 'department_head') {
+        navigate('/head/dashboard');
       } else {
         navigate('/faculty/dashboard');
       }
@@ -64,8 +82,52 @@ export const LoginPage: React.FC = () => {
           <span className="inline-block px-3 py-0.5 text-[10px] uppercase font-bold tracking-widest rounded-full border bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
             Geeta University VC Office Portal
           </span>
-          <h2 className="text-2xl font-extrabold text-[var(--text-primary)] tracking-tight font-display">Executive & Faculty Login</h2>
-          <p className="text-xs text-[var(--text-secondary)] font-medium">Enter your credentials to access your VC Office administration workstation</p>
+          <h2 className="text-2xl font-extrabold text-[var(--text-primary)] tracking-tight font-display">
+            3-Way Governance Login
+          </h2>
+          <p className="text-xs text-[var(--text-secondary)] font-medium">
+            Select your governance role or enter your institutional credentials
+          </p>
+        </div>
+
+        {/* 3 Role Preset Selectors */}
+        <div className="grid grid-cols-3 gap-2 p-1 rounded-xl bg-black/20 border border-[var(--panel-border)]">
+          <button
+            type="button"
+            onClick={() => setRolePreset('admin')}
+            className={`py-2 px-1.5 rounded-lg text-[11px] font-extrabold flex flex-col items-center justify-center gap-1 transition-all ${
+              selectedRole === 'admin'
+                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                : 'text-[var(--text-secondary)] hover:text-white'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>VC Office</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setRolePreset('head')}
+            className={`py-2 px-1.5 rounded-lg text-[11px] font-extrabold flex flex-col items-center justify-center gap-1 transition-all ${
+              selectedRole === 'head'
+                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                : 'text-[var(--text-secondary)] hover:text-white'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>Dept Head</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setRolePreset('faculty')}
+            className={`py-2 px-1.5 rounded-lg text-[11px] font-extrabold flex flex-col items-center justify-center gap-1 transition-all ${
+              selectedRole === 'faculty'
+                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                : 'text-[var(--text-secondary)] hover:text-white'
+            }`}
+          >
+            <User className="w-4 h-4" />
+            <span>Faculty</span>
+          </button>
         </div>
 
         {error && (
@@ -76,16 +138,16 @@ export const LoginPage: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">University Email Address</label>
+            <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">University Email / ID</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
               <input
-                type="email"
+                type="text"
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="faculty@geeta.edu.in"
-                className="glass-input pl-9"
+                placeholder="email@geeta.edu.in"
+                className="glass-input pl-9 text-xs"
               />
             </div>
           </div>
@@ -100,7 +162,7 @@ export const LoginPage: React.FC = () => {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="glass-input pl-9"
+                className="glass-input pl-9 text-xs"
               />
             </div>
           </div>

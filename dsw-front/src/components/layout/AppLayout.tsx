@@ -26,7 +26,11 @@ export const AppLayout: React.FC<{ allowedRoles: string[]; pageTitle: string }> 
 
   if (!allowedRoles.includes(user.role)) {
     // Redirect to default route per role
-    const dest = user.role === 'super_admin' ? '/admin/dashboard' : user.role === 'faculty' ? '/faculty/dashboard' : '/student/dashboard';
+    const dest = user.role === 'super_admin' 
+      ? '/admin/dashboard' 
+      : user.role === 'department_head' 
+      ? '/head/dashboard' 
+      : '/faculty/dashboard';
     return <Navigate to={dest} replace />;
   }
 

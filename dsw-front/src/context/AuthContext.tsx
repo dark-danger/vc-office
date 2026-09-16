@@ -6,7 +6,8 @@ export interface User {
   name: string;
   email: string;
   phone?: string;
-  role: 'super_admin' | 'faculty' | 'student';
+  role: 'super_admin' | 'department_head' | 'faculty' | 'student';
+  department_id?: number;
   department?: string;
   designation?: string;
   employee_id?: string;
