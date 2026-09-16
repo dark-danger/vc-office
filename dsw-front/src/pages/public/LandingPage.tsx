@@ -143,17 +143,17 @@ export const LandingPage: React.FC = () => {
             </span>
           </div>
 
-          {/* Card 3: Leaderboard Challenges */}
+          {/* Card 3: Institutional Event Reports */}
           <div className="glass-card p-6 relative overflow-hidden group border-emerald-500/30">
             <div className="p-3 w-12 h-12 rounded-xl bg-emerald-500/15 text-emerald-500 mb-4 flex items-center justify-center border border-emerald-500/30">
-              <Flame className="w-6 h-6" />
+              <Shield className="w-6 h-6" />
             </div>
-            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">Gamified Leaderboards</h3>
+            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">Compliance & Reporting</h3>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">
-              Participate in social welfare initiatives, blood donation drives, and academic publishing to earn university reward points.
+              Standardized 7-page institutional event reports with automated budget reconciliations and verified outcomes.
             </p>
             <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              Real-time Student Ranks <Star className="w-3.5 h-3.5" />
+              Geeta University Standard <Award className="w-3.5 h-3.5" />
             </span>
           </div>
         </div>
@@ -188,31 +188,6 @@ export const LandingPage: React.FC = () => {
           ) : (
             <div className="col-span-3 text-center py-8 text-[var(--text-muted)] text-sm">No upcoming public events loaded.</div>
           )}
-        </div>
-      </section>
-
-      {/* Student Hall of Fame Leaderboard Preview */}
-      <section className="max-w-6xl mx-auto px-6 py-12 border-t border-[var(--panel-border)] space-y-8">
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-extrabold text-[var(--text-primary)] font-display flex items-center justify-center gap-2">
-            <Trophy className="w-6 h-6 text-amber-500" /> Student Hall of Fame
-          </h2>
-          <p className="text-xs text-[var(--text-secondary)]">Top ranking student coordinators on the Geeta University Leaderboard</p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          {topStudents.map((stu) => (
-            <div key={stu.student_id} className="glass-panel p-6 text-center space-y-3 relative overflow-hidden border border-emerald-500/30">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-[#0e8a6e] to-emerald-400 mx-auto flex items-center justify-center text-white font-black text-lg shadow-lg shadow-emerald-500/20">
-                #{stu.rank}
-              </div>
-              <h4 className="font-bold text-base text-[var(--text-primary)]">{stu.name}</h4>
-              <p className="text-xs text-[var(--text-secondary)]">{stu.course_branch}</p>
-              <div className="inline-block px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-500/30">
-                ⭐ {stu.total_points} Reward Points
-              </div>
-            </div>
-          ))}
         </div>
       </section>
 

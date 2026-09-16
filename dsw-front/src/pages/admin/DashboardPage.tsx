@@ -131,7 +131,7 @@ export const AdminDashboardPage: React.FC = () => {
               <Users className="w-6 h-6" />
             </div>
           </div>
-          <p className="text-[11px] text-[var(--text-muted)] mt-3">{summary.total_student_points_awarded} pts awarded all-time</p>
+          <p className="text-[11px] text-[var(--text-muted)] mt-3">Registered student profiles</p>
         </div>
 
         <div className="glass-card p-5 border-l-4 border-l-teal-500">
@@ -170,7 +170,7 @@ export const AdminDashboardPage: React.FC = () => {
       </div>
 
       {/* Second KPI row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="glass-card p-5 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 text-[var(--text-muted)] text-xs font-semibold">
@@ -186,21 +186,11 @@ export const AdminDashboardPage: React.FC = () => {
         <div className="glass-card p-5 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 text-[var(--text-muted)] text-xs font-semibold">
-              <FileText className="w-4 h-4 text-sky-500" /> Public Form Responses
-            </div>
-            <h4 className="text-xl font-bold text-[var(--text-primary)] mt-2">{summary.total_form_responses}</h4>
-          </div>
-          <span className="text-xs text-[var(--text-muted)]">Across {summary.total_dynamic_forms} forms</span>
-        </div>
-
-        <div className="glass-card p-5 flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-[var(--text-muted)] text-xs font-semibold">
               <MessageSquareHeart className="w-4 h-4 text-pink-500" /> Feedback Submissions
             </div>
             <h4 className="text-xl font-bold text-[var(--text-primary)] mt-2">{summary.total_feedback_responses}</h4>
           </div>
-          <span className="text-xs text-[var(--text-muted)]">Across {summary.total_feedback_forms} forms</span>
+          <span className="text-xs text-[var(--text-muted)]">Across active feedback forms</span>
         </div>
       </div>
 

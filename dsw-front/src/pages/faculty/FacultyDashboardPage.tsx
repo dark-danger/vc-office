@@ -121,14 +121,14 @@ export const FacultyDashboardPage: React.FC = () => {
           <p className="text-xs text-[var(--text-secondary)]">Submit completion reports and upload proof documents for VC Office review.</p>
         </Link>
 
-        <Link to="/faculty/duty-charts" className="glass-card p-5 space-y-2 group hover:border-teal-500/50">
+        <Link to="/faculty/events/reports" className="glass-card p-5 space-y-2 group hover:border-teal-500/50">
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <FileCheck className="w-4 h-4 text-teal-600 dark:text-teal-400" /> Event Duty Charts
+              <FileText className="w-4 h-4 text-teal-600 dark:text-teal-400" /> Official Event Reports
             </span>
             <ArrowRight className="w-4 h-4 text-[var(--text-muted)] group-hover:text-teal-500 transition-colors" />
           </div>
-          <p className="text-xs text-[var(--text-secondary)]">View official campus event duty rosters and download printable PDF charts.</p>
+          <p className="text-xs text-[var(--text-secondary)]">Prepare, edit, and generate standard 7-page institutional event reports.</p>
         </Link>
 
         <Link to="/faculty/committees" className="glass-card p-5 space-y-2 group hover:border-emerald-500/50">
