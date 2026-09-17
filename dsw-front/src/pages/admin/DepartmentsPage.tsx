@@ -31,9 +31,13 @@ export const DepartmentsPage: React.FC = () => {
 
   // Assign HOD Modal state
   const [selectedDept, setSelectedDept] = useState<DepartmentItem | null>(null);
+  const [hodModalTab, setHodModalTab] = useState<'select' | 'manual'>('select');
+  const [allFacultyList, setAllFacultyList] = useState<any[]>([]);
   const [deptFacultyList, setDeptFacultyList] = useState<any[]>([]);
-  const [loadingDeptFaculty, setLoadingDeptFaculty] = useState(false);
-  const [selectedFacultyId, setSelectedFacultyId] = useState<string>('');
+  const [facultySearchQuery, setFacultySearchQuery] = useState('');
+  const [facultyScopeFilter, setFacultyScopeFilter] = useState<'all' | 'dept'>('all');
+  const [loadingFaculty, setLoadingFaculty] = useState(false);
+  const [selectedFaculty, setSelectedFaculty] = useState<any | null>(null);
   const [showHodModal, setShowHodModal] = useState(false);
   const [hodForm, setHodForm] = useState({
     head_id: undefined as number | undefined,
@@ -71,7 +75,10 @@ export const DepartmentsPage: React.FC = () => {
 
   const handleOpenHodModal = async (dept: DepartmentItem) => {
     setSelectedDept(dept);
-    setSelectedFacultyId(dept.head_id ? String(dept.head_id) : '');
+    setHodModalTab('select');
+    setFacultySearchQuery('');
+    setFacultyScopeFilter('all');
+    setSelectedFaculty(null);
     setHodForm({
       head_id: dept.head_id || undefined,
       name: dept.head_name || '',
@@ -83,37 +90,41 @@ export const DepartmentsPage: React.FC = () => {
     setAssignSuccess(null);
     setShowHodModal(true);
 
-    // Fetch department faculty
-    setLoadingDeptFaculty(true);
+    // Fetch both all faculty and department faculty
+    setLoadingFaculty(true);
     try {
-      const facs = await apiRequest<any[]>(`/departments/${dept.id}/faculty`);
-      setDeptFacultyList(facs || []);
+      const [allFacs, deptFacs] = await Promise.all([
+        apiRequest<any[]>('/users/faculty').catch(() => []),
+        apiRequest<any[]>(`/departments/${dept.id}/faculty`).catch(() => [])
+      ]);
+      setAllFacultyList(allFacs || []);
+      setDeptFacultyList(deptFacs || []);
+
+      if (dept.head_id && allFacs) {
+        const found = allFacs.find((f: any) => f.id === dept.head_id);
+        if (found) setSelectedFaculty(found);
+      }
     } catch (e) {
       console.error('Failed to load department faculty list', e);
-      setDeptFacultyList([]);
     } finally {
-      setLoadingDeptFaculty(false);
+      setLoadingFaculty(false);
     }
   };
 
-  const handleSelectFacultyCandidate = (facultyIdStr: string) => {
-    setSelectedFacultyId(facultyIdStr);
-    if (!facultyIdStr) return;
-    const fac = deptFacultyList.find(f => String(f.id) === facultyIdStr);
-    if (fac) {
-      setHodForm({
-        head_id: fac.id,
-        name: fac.name || '',
-        email: fac.email || '',
-        phone: fac.phone || '',
-        employee_id: fac.employee_id || '',
-        password: '',
-      });
-    }
+  const handleSelectFacultyCandidate = (fac: any) => {
+    setSelectedFaculty(fac);
+    setHodForm({
+      head_id: fac.id,
+      name: fac.name || '',
+      email: fac.email || '',
+      phone: fac.phone || '',
+      employee_id: fac.employee_id || '',
+      password: '',
+    });
   };
 
-  const handleAssignHod = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAssignHod = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!selectedDept) return;
     setAssigningHod(true);
     try {
@@ -123,7 +134,7 @@ export const DepartmentsPage: React.FC = () => {
       setTimeout(() => {
         setShowHodModal(false);
         setAssignSuccess(null);
-      }, 1500);
+      }, 1200);
     } catch (err: any) {
       alert(`Error assigning HOD: ${err.message}`);
     } finally {
@@ -392,149 +403,357 @@ export const DepartmentsPage: React.FC = () => {
       )}
 
       {/* --- MODAL 1: ASSIGN / EDIT HOD --- */}
-      {showHodModal && selectedDept && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-bg)] p-6 shadow-2xl relative">
-            <button
-              onClick={() => setShowHodModal(false)}
-              className="absolute right-5 top-5 p-2 rounded-full hover:bg-white/10 text-[var(--text-muted)] hover:text-white transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
+      {showHodModal && selectedDept && (() => {
+        const displayedFaculties = (facultyScopeFilter === 'dept' && deptFacultyList.length > 0 ? deptFacultyList : allFacultyList).filter((f: any) => {
+          if (!facultySearchQuery.trim()) return true;
+          const q = facultySearchQuery.toLowerCase();
+          return (
+            (f.name && f.name.toLowerCase().includes(q)) ||
+            (f.email && f.email.toLowerCase().includes(q)) ||
+            (f.employee_id && f.employee_id.toLowerCase().includes(q)) ||
+            (f.department && f.department.toLowerCase().includes(q)) ||
+            (f.designation && f.designation.toLowerCase().includes(q))
+          );
+        });
 
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-extrabold text-lg text-[var(--text-primary)]">
-                  Assign Head of Department
-                </h3>
-                <p className="text-xs text-[var(--text-muted)]">{selectedDept.name} ({selectedDept.code})</p>
-              </div>
-            </div>
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in overflow-y-auto">
+            <div className="w-full max-w-lg rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-bg)] p-6 shadow-2xl relative my-auto max-h-[92vh] overflow-y-auto">
+              <button
+                onClick={() => setShowHodModal(false)}
+                className="absolute right-5 top-5 p-2 rounded-full hover:bg-white/10 text-[var(--text-muted)] hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
 
-            {assignSuccess && (
-              <div className="mb-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                {assignSuccess}
-              </div>
-            )}
-
-            {/* Quick Pick from Department Faculty Roster */}
-            {deptFacultyList.length > 0 && (
-              <div className="mb-4 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-2">
-                <label className="block text-[11px] font-extrabold text-emerald-700 dark:text-emerald-300 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Crown className="w-3.5 h-3.5 text-amber-500" />
-                    Select from Department Faculty Roster:
-                  </span>
-                  <span className="text-[10px] text-[var(--text-muted)] font-normal">{deptFacultyList.length} faculty available</span>
-                </label>
-                <select
-                  value={selectedFacultyId}
-                  onChange={(e) => handleSelectFacultyCandidate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-emerald-500/40 text-xs text-[var(--text-primary)] focus:outline-none"
-                >
-                  <option value="">-- Choose faculty member to auto-fill --</option>
-                  {deptFacultyList.map((f: any) => (
-                    <option key={f.id} value={String(f.id)}>
-                      {f.name} ({f.employee_id || f.email}) - {f.designation || 'Faculty'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <form onSubmit={handleAssignHod} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-bold uppercase text-[var(--text-muted)] mb-1">
-                  Full Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Dr. Rajesh Kumar"
-                  value={hodForm.name}
-                  onChange={(e) => setHodForm({ ...hodForm, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-black/20 border border-[var(--panel-border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase text-[var(--text-muted)] mb-1">
-                  Official Email *
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. head.cse@geeta.edu.in"
-                  value={hodForm.email}
-                  onChange={(e) => setHodForm({ ...hodForm, email: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-black/20 border border-[var(--panel-border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase text-[var(--text-muted)] mb-1">
-                    Employee ID
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. GU1001"
-                    value={hodForm.employee_id}
-                    onChange={(e) => setHodForm({ ...hodForm, employee_id: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/20 border border-[var(--panel-border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500"
-                  />
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <Crown className="w-5 h-5 text-amber-400" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold uppercase text-[var(--text-muted)] mb-1">
-                    Phone Number
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="+91 98765 43210"
-                    value={hodForm.phone}
-                    onChange={(e) => setHodForm({ ...hodForm, phone: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/20 border border-[var(--panel-border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500"
-                  />
+                  <h3 className="font-extrabold text-lg text-[var(--text-primary)]">
+                    Assign Head of Department
+                  </h3>
+                  <p className="text-xs text-[var(--text-muted)]">{selectedDept.name} ({selectedDept.code})</p>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold uppercase text-[var(--text-muted)] mb-1">
-                  Password (Optional / Auto-set to Emp ID or Default)
-                </label>
-                <input
-                  type="password"
-                  placeholder="Leave blank to use default / Employee ID"
-                  value={hodForm.password}
-                  onChange={(e) => setHodForm({ ...hodForm, password: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-black/20 border border-[var(--panel-border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500"
-                />
-              </div>
+              {assignSuccess && (
+                <div className="mb-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  {assignSuccess}
+                </div>
+              )}
 
-              <div className="pt-3 border-t border-[var(--panel-border)] flex items-center justify-end gap-3">
+              {/* Mode Switcher Tabs */}
+              <div className="flex bg-black/40 p-1 rounded-xl border border-[var(--panel-border)] gap-1 mb-4">
                 <button
                   type="button"
-                  onClick={() => setShowHodModal(false)}
-                  className="px-4 py-2.5 rounded-xl bg-[var(--panel-border)] text-xs font-bold text-[var(--text-secondary)] hover:text-white"
+                  onClick={() => setHodModalTab('select')}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    hodModalTab === 'select'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
+                  }`}
                 >
-                  Cancel
+                  <Search className="w-3.5 h-3.5" />
+                  <span>Search Faculty Roster ({allFacultyList.length})</span>
                 </button>
                 <button
-                  type="submit"
-                  disabled={assigningHod}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 disabled:opacity-50 transition-all"
+                  type="button"
+                  onClick={() => setHodModalTab('manual')}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    hodModalTab === 'manual'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
+                  }`}
                 >
-                  {assigningHod ? 'Assigning...' : 'Save HOD'}
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Manual Entry</span>
                 </button>
               </div>
-            </form>
+
+              {/* TAB 1: SEARCH & SELECT FACULTY */}
+              {hodModalTab === 'select' && (
+                <div className="space-y-3.5">
+                  {/* Search Input */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-emerald-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={facultySearchQuery}
+                      onChange={(e) => setFacultySearchQuery(e.target.value)}
+                      placeholder="Type name, employee ID (GU...), department..."
+                      className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-black/40 border border-emerald-500/30 focus:border-emerald-500 text-xs text-[var(--text-primary)] focus:outline-none"
+                      autoFocus
+                    />
+                    {facultySearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setFacultySearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-white"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Scope filter pills */}
+                  {deptFacultyList.length > 0 && (
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="text-[var(--text-muted)] font-medium">Scope:</span>
+                      <button
+                        type="button"
+                        onClick={() => setFacultyScopeFilter('all')}
+                        className={`px-2.5 py-0.5 rounded-full font-bold transition-all ${
+                          facultyScopeFilter === 'all'
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                            : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-black/20'
+                        }`}
+                      >
+                        All Faculty ({allFacultyList.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFacultyScopeFilter('dept')}
+                        className={`px-2.5 py-0.5 rounded-full font-bold transition-all ${
+                          facultyScopeFilter === 'dept'
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                            : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-black/20'
+                        }`}
+                      >
+                        {selectedDept.name} ({deptFacultyList.length})
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Selected Faculty Banner */}
+                  {selectedFaculty && (
+                    <div className="p-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-between gap-2 shadow-sm animate-in fade-in">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-500 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-md">
+                          👑
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-extrabold text-xs text-[var(--text-primary)] flex items-center gap-1.5 truncate">
+                            <span className="truncate">{selectedFaculty.name}</span>
+                            {selectedFaculty.employee_id && (
+                              <span className="font-mono text-[10px] text-emerald-400 bg-emerald-500/20 px-1.5 py-0.2 rounded font-bold shrink-0">
+                                {selectedFaculty.employee_id}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-[var(--text-muted)] truncate">
+                            {selectedFaculty.email} • {selectedFaculty.department || 'General'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFaculty(null);
+                          setHodForm(prev => ({ ...prev, head_id: undefined }));
+                        }}
+                        className="text-[10px] font-bold text-rose-400 hover:underline shrink-0"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Searchable Scrollable Faculty List */}
+                  <div className="max-h-60 overflow-y-auto rounded-2xl border border-[var(--panel-border)] bg-black/30 p-1.5 space-y-1">
+                    {loadingFaculty ? (
+                      <div className="p-8 text-center text-xs text-[var(--text-muted)]">
+                        <div className="w-6 h-6 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mx-auto mb-2" />
+                        Loading faculty roster...
+                      </div>
+                    ) : displayedFaculties.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-[var(--text-muted)] space-y-1">
+                        <p className="font-bold text-[var(--text-primary)]">No faculty members found</p>
+                        <p className="text-[11px]">No faculty matches your search "{facultySearchQuery}". You can switch to Manual Entry tab.</p>
+                      </div>
+                    ) : (
+                      displayedFaculties.map((f: any) => {
+                        const isSelected = selectedFaculty?.id === f.id;
+                        const isCurrentDept = f.department === selectedDept.name || f.department_id === selectedDept.id;
+
+                        return (
+                          <div
+                            key={f.id}
+                            onClick={() => handleSelectFacultyCandidate(f)}
+                            className={`p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-between gap-3 ${
+                              isSelected
+                                ? 'bg-emerald-500/20 border border-emerald-500/50 shadow-sm'
+                                : 'hover:bg-white/5 border border-transparent'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 shadow-sm ${
+                                isSelected
+                                  ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white ring-2 ring-emerald-400/40'
+                                  : 'bg-black/40 border border-[var(--panel-border)] text-emerald-400'
+                              }`}>
+                                {f.name?.charAt(0) || 'F'}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-bold text-xs text-[var(--text-primary)] truncate flex items-center gap-1.5">
+                                  <span className="truncate">{f.name}</span>
+                                  {f.employee_id && (
+                                    <span className="font-mono text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded font-bold shrink-0">
+                                      {f.employee_id}
+                                    </span>
+                                  )}
+                                  {isCurrentDept && (
+                                    <span className="text-[8px] uppercase font-extrabold text-blue-400 bg-blue-500/15 px-1.5 py-0.2 rounded border border-blue-400/30 shrink-0">
+                                      Dept Staff
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-[var(--text-muted)] truncate flex items-center gap-1.5">
+                                  <span>{f.department || 'General'}</span>
+                                  <span>•</span>
+                                  <span className="truncate">{f.email}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="shrink-0">
+                              {isSelected ? (
+                                <div className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center shadow-sm">
+                                  <CheckCircle2 className="w-4 h-4" />
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-slate-950 border border-emerald-500/30 text-[10px] font-bold transition-all"
+                                >
+                                  Select
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="pt-3 border-t border-[var(--panel-border)] flex items-center justify-end gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowHodModal(false)}
+                      className="px-4 py-2 rounded-xl bg-[var(--panel-border)] text-xs font-bold text-[var(--text-secondary)] hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAssignHod()}
+                      disabled={assigningHod || !selectedFaculty}
+                      className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 disabled:opacity-50 transition-all flex items-center gap-1.5"
+                    >
+                      <Crown className="w-3.5 h-3.5" />
+                      <span>{assigningHod ? 'Appointing...' : selectedFaculty ? `Appoint ${selectedFaculty.name.split(' ')[0]} as HOD` : 'Select Faculty Member'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: MANUAL ENTRY FORM */}
+              {hodModalTab === 'manual' && (
+                <form onSubmit={handleAssignHod} className="space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-[var(--text-muted)] mb-1">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Dr. Rajesh Kumar"
+                      value={hodForm.name}
+                      onChange={(e) => setHodForm({ ...hodForm, name: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-black/20 border border-[var(--panel-border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-[var(--text-muted)] mb-1">
+                      Official Email *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="e.g. head.cse@geeta.edu.in"
+                      value={hodForm.email}
+                      onChange={(e) => setHodForm({ ...hodForm, email: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-black/20 border border-[var(--panel-border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-[var(--text-muted)] mb-1">
+                        Employee ID
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. GU1001"
+                        value={hodForm.employee_id}
+                        onChange={(e) => setHodForm({ ...hodForm, employee_id: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-black/20 border border-[var(--panel-border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-[var(--text-muted)] mb-1">
+                        Phone Number
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="+91 98765 43210"
+                        value={hodForm.phone}
+                        onChange={(e) => setHodForm({ ...hodForm, phone: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-black/20 border border-[var(--panel-border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-[var(--text-muted)] mb-1">
+                      Password (Optional / Auto-set to Emp ID or Default)
+                    </label>
+                    <input
+                      type="password"
+                      placeholder="Leave blank to use default / Employee ID"
+                      value={hodForm.password}
+                      onChange={(e) => setHodForm({ ...hodForm, password: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-black/20 border border-[var(--panel-border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div className="pt-3 border-t border-[var(--panel-border)] flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowHodModal(false)}
+                      className="px-4 py-2.5 rounded-xl bg-[var(--panel-border)] text-xs font-bold text-[var(--text-secondary)] hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={assigningHod}
+                      className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 disabled:opacity-50 transition-all"
+                    >
+                      {assigningHod ? 'Assigning...' : 'Save HOD'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* --- MODAL 2: BULK FACULTY CSV ONBOARDING --- */}
       {showCsvModal && selectedDept && (
