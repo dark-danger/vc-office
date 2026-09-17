@@ -33,9 +33,9 @@ interface TaskProofSubmitterProps {
   disabled?: boolean;
 }
 
-const DEFAULT_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwdnLapR8FacMxMw_q5fJn4Gf5bUPJVrLTmoPzuFmOtcnCDuotK4KubjuSkVHNf1O_b/exec";
-const DEFAULT_DRIVE_FOLDER_ID = "1cljBSpx8NlB24yN_7N0jH7kPBvYY6QHZ";
-const DEFAULT_DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1cljBSpx8NlB24yN_7N0jH7kPBvYY6QHZ";
+const DEFAULT_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz1F8TTgQhnmzHLqDjnZjV8ORRUmtDkf6aukwrbYtxCyxJ-llNdqAN5yM8bveFRqPT5/exec";
+const DEFAULT_DRIVE_FOLDER_ID = "1H13L_MhDiKa0YBCW7SoMJAkcq0D8dtRS";
+const DEFAULT_DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1H13L_MhDiKa0YBCW7SoMJAkcq0D8dtRS";
 
 // MIME type detection helper for docx, doc, xlsx, pdf, zip, etc.
 const getMimeType = (file: File): string => {
