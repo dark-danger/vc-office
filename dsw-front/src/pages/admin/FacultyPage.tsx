@@ -5,7 +5,8 @@ import { ProofViewer } from '../../components/tasks/ProofViewer';
 import {
   UserPlus, Search, Shield, Award, CheckCircle2, Clock, X, BarChart3,
   Trash2, Calendar, RotateCcw, Filter, CheckSquare, Sparkles, FileCheck,
-  XCircle, ChevronDown, User as UserIcon, RefreshCw, ArrowRight, CornerDownRight
+  XCircle, ChevronDown, User as UserIcon, RefreshCw, ArrowRight, CornerDownRight,
+  Upload, FileSpreadsheet, Building2, Download
 } from 'lucide-react';
 
 interface PeriodStats {
@@ -77,7 +78,14 @@ export const FacultyPage: React.FC = () => {
   // Directory State
   const [facultyList, setFacultyList] = useState<User[]>([]);
   const [searchDirectory, setSearchDirectory] = useState('');
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
   const [loadingDirectory, setLoadingDirectory] = useState(true);
+
+  // Bulk CSV Upload State
+  const [showCsvModal, setShowCsvModal] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [uploadingCsv, setUploadingCsv] = useState(false);
+  const [csvResult, setCsvResult] = useState<any | null>(null);
 
   // Tasks Filter State
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -119,6 +127,36 @@ export const FacultyPage: React.FC = () => {
     } finally {
       setLoadingDirectory(false);
     }
+  };
+
+  // Bulk CSV Upload Handlers
+  const handleCsvUpload = async () => {
+    if (!csvFile) return;
+    setUploadingCsv(true);
+    setCsvResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', csvFile);
+      const res = await apiRequest('/departments/upload-csv', 'POST', formData, true);
+      setCsvResult(res);
+      await fetchFaculty();
+    } catch (err: any) {
+      alert(`CSV Upload Failed: ${err.message}`);
+    } finally {
+      setUploadingCsv(false);
+    }
+  };
+
+  const downloadSampleCsv = () => {
+    const csvContent = 'name,employee_id,department,designation,phone,email\nDr. Amit Sharma,GU3001,Computer Science & Engineering,Associate Professor,+91 9876543210,amit.sharma@geeta.edu.in\nDr. Priya Verma,GU3002,Mechanical Engineering,Assistant Professor,+91 9812345678,priya.verma@geeta.edu.in\nDr. Rahul Gupta,GU3003,School of Business & Management,Professor,+91 9823456789,rahul.gupta@geeta.edu.in\n';
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `geeta_university_faculty_master_template.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Fetch Tasks with Current Filters
@@ -254,6 +292,16 @@ export const FacultyPage: React.FC = () => {
     setTaskSearchQuery('');
   };
 
+  // Distinct departments from loaded faculty list
+  const departments = Array.from(new Set(facultyList.map(f => f.department).filter(Boolean))) as string[];
+
+  const filteredFaculty = facultyList.filter(f => {
+    if (selectedDeptFilter !== 'all' && f.department !== selectedDeptFilter) {
+      return false;
+    }
+    return true;
+  });
+
   const getActiveStats = (stats: FacultyStats): PeriodStats => {
     if (activePeriodTab === 'weekly' && stats.weekly) return stats.weekly;
     if (activePeriodTab === 'monthly' && stats.monthly) return stats.monthly;
@@ -282,23 +330,35 @@ export const FacultyPage: React.FC = () => {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold uppercase tracking-wider mb-2">
               <Shield className="w-3.5 h-3.5 text-emerald-500" />
-              Faculty Governance & Duty Tracking
+              University Faculty Administration
             </div>
-            <h1 className="text-2xl font-black text-[var(--text-primary)] tracking-tight">
-              Faculty Management & Task Filters
+            <h1 className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] tracking-tight">
+              Faculty Roster & Bulk CSV Import
             </h1>
             <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1 max-w-2xl leading-relaxed">
-              Manage faculty credentials, track duty completion metrics, and filter faculty tasks by Date, Faculty Name, and Event.
+              Maintain university-wide faculty records across all departments. Import 500+ faculty members via master CSV, manage credentials, and monitor duty analytics.
             </p>
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
             <button
+              onClick={() => {
+                setCsvFile(null);
+                setCsvResult(null);
+                setShowCsvModal(true);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-all shadow-sm active:scale-95"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Bulk CSV Upload</span>
+            </button>
+
+            <button
               onClick={() => setIsAddModalOpen(true)}
               className="btn-primary text-xs py-2.5 px-4 flex items-center gap-2 font-bold shadow-md shadow-emerald-600/20 active:scale-95"
             >
               <UserPlus className="w-4 h-4" />
-              <span>Add Faculty Member</span>
+              <span>Add Faculty</span>
             </button>
           </div>
         </div>
@@ -314,7 +374,7 @@ export const FacultyPage: React.FC = () => {
             }`}
           >
             <UserIcon className="w-4 h-4" />
-            <span>Faculty Directory ({facultyList.length})</span>
+            <span>Faculty Roster ({facultyList.length})</span>
           </button>
 
           <button
@@ -336,24 +396,42 @@ export const FacultyPage: React.FC = () => {
       {/* ========================================================================= */}
       {activeMainTab === 'directory' && (
         <div className="space-y-4">
-          {/* Search Filter */}
-          <div className="relative max-w-md">
-            <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchDirectory}
-              onChange={e => setSearchDirectory(e.target.value)}
-              placeholder="Search faculty by name, email, or department..."
-              className="glass-input pl-9 text-xs py-2.5 w-full"
-            />
-            {searchDirectory && (
-              <button
-                onClick={() => setSearchDirectory('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+          {/* Search & Department Filter Bar */}
+          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+            <div className="relative flex-1 w-full sm:max-w-md">
+              <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchDirectory}
+                onChange={e => setSearchDirectory(e.target.value)}
+                placeholder="Search faculty by name, email, employee ID..."
+                className="glass-input pl-9 text-xs py-2.5 w-full"
+              />
+              {searchDirectory && (
+                <button
+                  onClick={() => setSearchDirectory('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Building2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              <select
+                value={selectedDeptFilter}
+                onChange={e => setSelectedDeptFilter(e.target.value)}
+                className="glass-input text-xs py-2.5 px-3 w-full sm:w-64 shrink-0"
               >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
+                <option value="all">-- All Departments ({departments.length}) --</option>
+                {departments.map(dept => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Faculty Table */}
@@ -377,14 +455,14 @@ export const FacultyPage: React.FC = () => {
                         Loading faculty members...
                       </td>
                     </tr>
-                  ) : facultyList.length === 0 ? (
+                  ) : filteredFaculty.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-12 text-center text-[var(--text-muted)]">
-                        No faculty members found.
+                        No faculty members matched the current search / department filter.
                       </td>
                     </tr>
                   ) : (
-                    facultyList.map((f) => (
+                    filteredFaculty.map((f) => (
                       <tr key={f.id} className="hover:bg-emerald-500/5 transition-colors">
                         <td className="p-4">
                           <div className="flex items-center gap-3">
@@ -393,13 +471,13 @@ export const FacultyPage: React.FC = () => {
                             </div>
                             <div>
                               <div className="font-bold text-xs sm:text-sm text-[var(--text-primary)]">{f.name}</div>
-                              <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase">Faculty Coordinator</div>
+                              <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase">Faculty Staff</div>
                             </div>
                           </div>
                         </td>
                         <td className="p-4">
                           <div className="text-[var(--text-primary)] font-medium text-xs">{f.department || 'General'}</div>
-                          <div className="text-[11px] text-[var(--text-muted)]">{f.designation || 'Staff'}</div>
+                          <div className="text-[11px] text-[var(--text-muted)]">{f.designation || 'Faculty'}</div>
                         </td>
                         <td className="p-4 font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold">
                           {f.employee_id || 'N/A'}
@@ -921,6 +999,135 @@ export const FacultyPage: React.FC = () => {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* BULK CSV FACULTY ONBOARDING MODAL */}
+      {/* ========================================================================= */}
+      {showCsvModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs overflow-y-auto">
+          <div className="w-full max-w-2xl glass-panel p-5 sm:p-6 shadow-2xl relative my-auto max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+            <button
+              onClick={() => setShowCsvModal(false)}
+              className="absolute right-5 top-5 p-2 rounded-full hover:bg-white/10 text-[var(--text-muted)] hover:text-white transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-500 shadow-md">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-lg text-[var(--text-primary)]">
+                  Master Bulk Faculty CSV Import
+                </h3>
+                <p className="text-xs text-[var(--text-muted)]">Upload university-wide faculty records with automatic department mapping</p>
+              </div>
+            </div>
+
+            {/* Instruction Callout */}
+            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 mb-5 space-y-2">
+              <div className="font-bold text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-emerald-500" /> Automatic Credential Generation:
+              </div>
+              <ul className="text-[11px] text-[var(--text-secondary)] list-disc list-inside space-y-1">
+                <li>If <b>email</b> is omitted in CSV, it is auto-generated as: <code className="text-emerald-600 dark:text-emerald-400 font-mono">&lt;employee_id&gt;@geeta.edu.in</code> (e.g., <code className="text-emerald-600 dark:text-emerald-400 font-mono">gu3216@geeta.edu.in</code>).</li>
+                <li>Initial <b>password</b> will be set directly to their <code className="text-emerald-600 dark:text-emerald-400 font-mono">&lt;employee_id&gt;</code> (e.g., <code className="text-emerald-600 dark:text-emerald-400 font-mono">GU3216</code>).</li>
+                <li>Specify <b>department</b> in the CSV (e.g., <code className="text-emerald-600 dark:text-emerald-400 font-mono">CSE</code>, <code className="text-emerald-600 dark:text-emerald-400 font-mono">Mechanical</code>, <code className="text-emerald-600 dark:text-emerald-400 font-mono">Law</code>) to automatically place faculty into their respective departments.</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-[var(--text-primary)]">Select Master CSV File</span>
+              <button
+                type="button"
+                onClick={downloadSampleCsv}
+                className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+              >
+                <Download className="w-3.5 h-3.5" /> Download Sample CSV Template
+              </button>
+            </div>
+
+            {/* Drag and drop / file picker */}
+            <div className="border-2 border-dashed border-[var(--panel-border)] hover:border-emerald-500/50 rounded-2xl p-6 text-center bg-black/20 transition-all">
+              <input
+                type="file"
+                accept=".csv"
+                id="facultyCsvFileInput"
+                onChange={(e) => setCsvFile(e.target.files ? e.target.files[0] : null)}
+                className="hidden"
+              />
+              <label htmlFor="facultyCsvFileInput" className="cursor-pointer flex flex-col items-center">
+                <Upload className="w-8 h-8 text-emerald-500 mb-2" />
+                <div className="font-extrabold text-xs text-[var(--text-primary)]">
+                  {csvFile ? csvFile.name : 'Click or Drag & Drop Faculty CSV file here'}
+                </div>
+                <p className="text-[10px] text-[var(--text-muted)] mt-1">Accepts standard .csv format (Columns: name, employee_id, department, designation, phone, email)</p>
+              </label>
+            </div>
+
+            {/* Upload Action */}
+            <div className="mt-5 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowCsvModal(false)}
+                className="btn-secondary text-xs"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={handleCsvUpload}
+                disabled={!csvFile || uploadingCsv}
+                className="btn-primary text-xs py-2 px-5 font-bold shadow-md shadow-emerald-600/20 disabled:opacity-50"
+              >
+                {uploadingCsv ? 'Processing Master CSV...' : 'Start Master Import'}
+              </button>
+            </div>
+
+            {/* Results Table */}
+            {csvResult && (
+              <div className="mt-6 pt-5 border-t border-[var(--panel-border)] space-y-4 animate-in fade-in duration-150">
+                <div className="p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center justify-between">
+                  <span>Import Completed: {csvResult.created_count} New Faculty Created ({csvResult.skipped_count} Skipped / Updated)</span>
+                </div>
+
+                {csvResult.created_accounts && csvResult.created_accounts.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-extrabold text-[var(--text-primary)] mb-2">
+                      Generated Faculty Credentials ({csvResult.created_accounts.length})
+                    </h4>
+                    <div className="max-h-60 overflow-y-auto rounded-xl border border-[var(--panel-border)] bg-black/30">
+                      <table className="w-full text-left text-[11px]">
+                        <thead>
+                          <tr className="border-b border-[var(--panel-border)] text-[var(--text-muted)] uppercase text-[9px] font-bold">
+                            <th className="py-2 px-3">Name</th>
+                            <th className="py-2 px-3">Employee ID</th>
+                            <th className="py-2 px-3">Department</th>
+                            <th className="py-2 px-3">Generated Email</th>
+                            <th className="py-2 px-3">Password</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--panel-border)]/50">
+                          {csvResult.created_accounts.map((cred: any, i: number) => (
+                            <tr key={i} className="hover:bg-white/5">
+                              <td className="py-2 px-3 font-semibold text-[var(--text-primary)]">{cred.name}</td>
+                              <td className="py-2 px-3 font-mono text-emerald-500 font-bold">{cred.employee_id}</td>
+                              <td className="py-2 px-3 text-[var(--text-secondary)]">{cred.department}</td>
+                              <td className="py-2 px-3 font-mono text-[var(--text-secondary)]">{cred.email}</td>
+                              <td className="py-2 px-3 font-mono text-amber-500 font-bold">{cred.initial_password}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

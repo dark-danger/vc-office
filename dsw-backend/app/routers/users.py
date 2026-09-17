@@ -44,6 +44,43 @@ async def create_faculty(
 
     return UserOut.model_validate(faculty)
 
+@router.get("/heads", response_model=List[UserOut])
+async def list_department_heads(
+    search: Optional[str] = None,
+    department: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    query = select(User).where(User.role.in_([UserRole.department_head, UserRole.super_admin]), User.is_active == True)
+    if search:
+        query = query.where((User.name.ilike(f"%{search}%")) | (User.email.ilike(f"%{search}%")))
+    if department:
+        query = query.where(User.department == department)
+        
+    result = await db.execute(query.order_by(User.name))
+    heads_list = result.scalars().all()
+    return [UserOut.model_validate(h) for h in heads_list]
+
+@router.get("", response_model=List[UserOut])
+async def list_all_users(
+    role: Optional[str] = None,
+    search: Optional[str] = None,
+    department: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    query = select(User).where(User.is_active == True)
+    if role:
+        query = query.where(User.role == role)
+    if search:
+        query = query.where((User.name.ilike(f"%{search}%")) | (User.email.ilike(f"%{search}%")))
+    if department:
+        query = query.where(User.department == department)
+        
+    result = await db.execute(query.order_by(User.name))
+    users_list = result.scalars().all()
+    return [UserOut.model_validate(u) for u in users_list]
+
 @router.get("/faculty", response_model=List[UserOut])
 async def list_faculty(
     search: Optional[str] = None,
@@ -51,7 +88,7 @@ async def list_faculty(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    query = select(User).where(User.role == UserRole.faculty, User.is_active == True)
+    query = select(User).where(User.role.in_([UserRole.department_head, UserRole.faculty]), User.is_active == True)
     if search:
         query = query.where((User.name.ilike(f"%{search}%")) | (User.email.ilike(f"%{search}%")))
     if department:

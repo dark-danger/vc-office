@@ -95,7 +95,7 @@ export const PublicFeedbackFormPage: React.FC = () => {
         <div className="glass-panel p-6 sm:p-8 max-w-md text-center space-y-4 my-auto">
           <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto animate-bounce" />
           <h2 className="text-2xl font-bold text-[var(--text-primary)]">Thank You for Your Feedback!</h2>
-          <p className="text-xs text-[var(--text-secondary)]">Your valuable insights have been recorded for Dean of Student Welfare quality improvements.</p>
+          <p className="text-xs text-[var(--text-secondary)]">Your valuable insights have been recorded for Vice Chancellor's Office quality improvements.</p>
         </div>
       </div>
     );
@@ -106,10 +106,10 @@ export const PublicFeedbackFormPage: React.FC = () => {
       <div className="w-full max-w-xl glass-panel p-5 sm:p-8 relative shadow-2xl space-y-5 sm:space-y-6 my-4 sm:my-auto">
         <div className="border-b border-[var(--panel-border)] pb-4">
           <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
-            Student Feedback Survey
+            Institutional Feedback Survey
           </span>
           <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] mt-2">{form.title}</h1>
-          <p className="text-xs text-[var(--text-secondary)] mt-1">{form.description || 'Geeta University Dean of Student Welfare'}</p>
+          <p className="text-xs text-[var(--text-secondary)] mt-1">{form.description || 'Geeta University Vice Chancellor\'s Office'}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">

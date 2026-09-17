@@ -150,13 +150,13 @@ export const DepartmentsPage: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-2">
-            <Building2 className="w-3.5 h-3.5" /> 3-Way Governance Engine
+            <Building2 className="w-3.5 h-3.5" /> 2-Tier Institutional Governance
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] tracking-tight">
             University Department Management
           </h1>
           <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1">
-            Configure Heads of Department (HOD), monitor faculty headcount, and onboard 500+ faculty members via bulk CSV.
+            Configure Heads of Department (HOD), monitor departmental performance, and manage institutional academic and non-teaching units.
           </p>
         </div>
 

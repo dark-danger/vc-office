@@ -7,7 +7,7 @@ import {
   ClipboardCheck, CheckCircle2, XCircle, Clock, AlertCircle,
   FileText, User as UserIcon, Calendar, Search, Filter, Sparkles,
   RefreshCw, Check, X, ShieldAlert, Award, FileCheck, ArrowUpRight,
-  ChevronDown, ListTree
+  ChevronDown, ListTree, Building2, Users
 } from 'lucide-react';
 
 interface Submission {
@@ -25,6 +25,25 @@ interface Submission {
   reviewed_at?: string;
 }
 
+interface LinedUpFaculty {
+  faculty_id: number;
+  faculty_name: string;
+  employee_id?: string;
+  role?: string;
+  designation?: string;
+  email?: string;
+}
+
+interface CompletionReport {
+  summary?: string;
+  achievements?: string;
+  faculty_contributions?: string;
+  file_url?: string;
+  file_name?: string;
+  submitted_at?: string;
+  submitted_by_name?: string;
+}
+
 interface TaskItem {
   id: number;
   title: string;
@@ -33,6 +52,9 @@ interface TaskItem {
   event_id?: number;
   event_title?: string;
   parent_task_id?: number;
+  department_id?: number;
+  department_name?: string;
+  points_reward?: number;
   assigned_to: number;
   assignee?: User;
   assigned_by: number;
@@ -41,19 +63,21 @@ interface TaskItem {
   priority: 'low' | 'medium' | 'high';
   status: 'pending' | 'in_progress' | 'submitted' | 'approved' | 'declined';
   created_at: string;
+  lined_up_faculty?: LinedUpFaculty[];
+  completion_report?: CompletionReport;
   submissions: Submission[];
 }
 
 export const AdminRequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<TaskItem[]>([]);
-  const [facultyList, setFacultyList] = useState<User[]>([]);
+  const [headsList, setHeadsList] = useState<User[]>([]);
   const [eventsList, setEventsList] = useState<{ id: number; title: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
 
   // Filters
   const [statusTab, setStatusTab] = useState<'pending' | 'self_created' | 'all' | 'approved' | 'declined'>('pending');
-  const [selectedFaculty, setSelectedFaculty] = useState<string>('all');
+  const [selectedHead, setSelectedHead] = useState<string>('all');
   const [selectedEvent, setSelectedEvent] = useState<string>('all');
   const [dateFilterType, setDateFilterType] = useState<'all' | 'today' | 'week' | 'month' | 'custom'>('all');
   const [customFromDate, setCustomFromDate] = useState('');
@@ -74,13 +98,13 @@ export const AdminRequestsPage: React.FC = () => {
   const fetchRequests = async () => {
     setLoading(true);
     try {
-      const [reqData, facData, evData] = await Promise.all([
+      const [reqData, headData, evData] = await Promise.all([
         apiRequest<TaskItem[]>('/tasks/requests?status_filter=all'),
-        facultyList.length > 0 ? Promise.resolve(facultyList) : apiRequest<User[]>('/users/faculty').catch(() => []),
+        headsList.length > 0 ? Promise.resolve(headsList) : apiRequest<User[]>('/users/heads').catch(() => []),
         eventsList.length > 0 ? Promise.resolve(eventsList) : apiRequest<{ id: number; title: string }[]>('/events').catch(() => [])
       ]);
       setRequests(reqData);
-      if (facultyList.length === 0) setFacultyList(facData);
+      if (headsList.length === 0) setHeadsList(headData);
       if (eventsList.length === 0) setEventsList(evData);
     } catch (e) {
       console.error('Failed to fetch requests:', e);
@@ -96,8 +120,8 @@ export const AdminRequestsPage: React.FC = () => {
   const handleApprove = async (task: TaskItem) => {
     const isSubtask = Boolean(task.parent_task_id || task.task_type === 'subtask');
     const promptMsg = isSubtask
-      ? `Approve subtask "${task.title}" for ${task.assignee?.name || 'faculty'}? (Subtasks award +0 extra points)`
-      : `Approve task "${task.title}" and award leaderboard points to ${task.assignee?.name || 'faculty'}?`;
+      ? `Approve subtask "${task.title}" for ${task.assignee?.name || 'Department Head'}? (Subtasks award +0 extra points)`
+      : `Approve deliverable "${task.title}" and award departmental points to ${task.assignee?.name || 'Department Head'}?`;
 
     if (!window.confirm(promptMsg)) {
       return;
@@ -108,9 +132,9 @@ export const AdminRequestsPage: React.FC = () => {
       const updated = await apiRequest<TaskItem>(`/tasks/${task.id}/approve`, 'POST');
       setRequests(prev => prev.map(t => t.id === task.id ? updated : t));
       if (isSubtask) {
-        showToast(`🎉 Subtask "${task.title}" approved (+0 extra points) for ${task.assignee?.name || 'faculty'}.`);
+        showToast(`🎉 Subtask "${task.title}" approved for ${task.assignee?.name || 'Department'}.`);
       } else {
-        showToast(`🎉 Task "${task.title}" approved! +10 points awarded to ${task.assignee?.name || 'faculty'}.`);
+        showToast(`🎉 Directive "${task.title}" approved! +10 points awarded to ${task.assignee?.department || task.assignee?.name || 'Department'}.`);
       }
     } catch (err: any) {
       alert(err.message || 'Failed to approve task');
@@ -130,7 +154,7 @@ export const AdminRequestsPage: React.FC = () => {
         review_remarks: declineRemarks.trim()
       });
       setRequests(prev => prev.map(t => t.id === selectedTaskForDecline.id ? updated : t));
-      showToast(`Task declined. -3 points penalty deducted from ${selectedTaskForDecline.assignee?.name || 'faculty'}.`);
+      showToast(`Directive returned with remarks to ${selectedTaskForDecline.assignee?.name || 'Department Head'}.`);
       setSelectedTaskForDecline(null);
       setDeclineRemarks('');
     } catch (err: any) {
@@ -159,8 +183,8 @@ export const AdminRequestsPage: React.FC = () => {
       if (t.status !== 'declined') return false;
     }
 
-    // Faculty Filter
-    if (selectedFaculty !== 'all' && String(t.assigned_to) !== selectedFaculty) {
+    // Head Filter
+    if (selectedHead !== 'all' && String(t.assigned_to) !== selectedHead) {
       return false;
     }
 
@@ -198,10 +222,10 @@ export const AdminRequestsPage: React.FC = () => {
       const q = searchQuery.toLowerCase();
       const matchTitle = t.title.toLowerCase().includes(q);
       const matchDesc = (t.description || '').toLowerCase().includes(q);
-      const matchFaculty = (t.assignee?.name || '').toLowerCase().includes(q);
+      const matchHead = (t.assignee?.name || '').toLowerCase().includes(q);
       const matchDept = (t.assignee?.department || '').toLowerCase().includes(q);
       const matchEvent = (t.event_title || '').toLowerCase().includes(q);
-      if (!matchTitle && !matchDesc && !matchFaculty && !matchDept && !matchEvent) {
+      if (!matchTitle && !matchDesc && !matchHead && !matchDept && !matchEvent) {
         return false;
       }
     }
@@ -232,13 +256,13 @@ export const AdminRequestsPage: React.FC = () => {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold uppercase tracking-wider mb-2">
               <ClipboardCheck className="w-3.5 h-3.5 text-amber-500" />
-              VC Office Task & Duty Approval Center
+              VC Office Directive & Deliverable Approval Center
             </div>
             <h1 className="text-2xl font-black text-[var(--text-primary)] tracking-tight">
-              Faculty Requests & Approvals
+              Department Deliverables & Directives Review
             </h1>
             <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1 max-w-2xl leading-relaxed">
-              Review and verify tasks created by faculty members and duty completion proofs. Approved tasks immediately award points (+10 on-time) to the faculty staff leaderboard.
+              Review and verify deliverables, event compliance, and reports submitted by Department Heads. Approved deliverables immediately award departmental points to the institutional leaderboard.
             </p>
           </div>
 
@@ -271,7 +295,7 @@ export const AdminRequestsPage: React.FC = () => {
             <div className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] mt-1.5 font-mono">
               {pendingCount}
             </div>
-            <p className="text-[11px] text-[var(--text-muted)] mt-1">Awaiting your approval</p>
+            <p className="text-[11px] text-[var(--text-muted)] mt-1">Awaiting VC Office approval</p>
           </div>
 
           <div
@@ -284,16 +308,16 @@ export const AdminRequestsPage: React.FC = () => {
           >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-purple-700 dark:text-purple-400 flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" /> Self-Created
+                <Sparkles className="w-3.5 h-3.5" /> Department Initiatives
               </span>
               <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/20 text-purple-700 dark:text-purple-300 font-bold">
-                Faculty
+                HOD
               </span>
             </div>
             <div className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] mt-1.5 font-mono">
               {selfCreatedCount}
             </div>
-            <p className="text-[11px] text-[var(--text-muted)] mt-1">Faculty proposed duties</p>
+            <p className="text-[11px] text-[var(--text-muted)] mt-1">Initiated by Department Heads</p>
           </div>
 
           <div
@@ -323,13 +347,13 @@ export const AdminRequestsPage: React.FC = () => {
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-rose-700 dark:text-rose-400">Declined</span>
+              <span className="text-xs font-bold text-rose-700 dark:text-rose-400">Returned</span>
               <XCircle className="w-4 h-4 text-rose-500" />
             </div>
             <div className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] mt-1.5 font-mono">
               {declinedCount}
             </div>
-            <p className="text-[11px] text-[var(--text-muted)] mt-1">Sent back with remarks</p>
+            <p className="text-[11px] text-[var(--text-muted)] mt-1">Returned with remarks</p>
           </div>
         </div>
       </div>
@@ -356,7 +380,7 @@ export const AdminRequestsPage: React.FC = () => {
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
-            Self-Created ({selfCreatedCount})
+            Department Initiatives ({selfCreatedCount})
           </button>
           <button
             onClick={() => setStatusTab('approved')}
@@ -376,7 +400,7 @@ export const AdminRequestsPage: React.FC = () => {
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
-            Declined ({declinedCount})
+            Returned ({declinedCount})
           </button>
           <button
             onClick={() => setStatusTab('all')}
@@ -386,7 +410,7 @@ export const AdminRequestsPage: React.FC = () => {
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
-            All Requests ({requests.length})
+            All Submissions ({requests.length})
           </button>
         </div>
 
@@ -396,7 +420,7 @@ export const AdminRequestsPage: React.FC = () => {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
             <input
               type="text"
-              placeholder="Search faculty, title..."
+              placeholder="Search department, title..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="glass-input pl-9 text-xs py-2 w-full"
@@ -424,22 +448,22 @@ export const AdminRequestsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Advanced Secondary Filters: Faculty, Event, Date */}
+      {/* Advanced Secondary Filters: Department Head, Event, Date */}
       <div className="glass-panel p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* Faculty Name Filter */}
+        {/* Department Head Filter */}
         <div>
           <label className="block text-[11px] font-bold text-[var(--text-primary)] mb-1 flex items-center gap-1">
-            <UserIcon className="w-3 h-3 text-blue-500" /> Filter by Faculty
+            <Building2 className="w-3 h-3 text-blue-500" /> Filter by Department / Head
           </label>
           <select
-            value={selectedFaculty}
-            onChange={e => setSelectedFaculty(e.target.value)}
+            value={selectedHead}
+            onChange={e => setSelectedHead(e.target.value)}
             className="glass-input text-xs w-full"
           >
-            <option value="all">-- All Faculty Members ({facultyList.length}) --</option>
-            {facultyList.map(f => (
-              <option key={f.id} value={String(f.id)}>
-                {f.name} ({f.department || 'Faculty'})
+            <option value="all">-- All Departments ({headsList.length}) --</option>
+            {headsList.map(h => (
+              <option key={h.id} value={String(h.id)}>
+                {h.department || h.name} ({h.name})
               </option>
             ))}
           </select>
@@ -511,24 +535,23 @@ export const AdminRequestsPage: React.FC = () => {
         </div>
       )}
 
-
       {/* Requests List */}
       <div className="space-y-4">
         {loading ? (
           <div className="p-12 text-center glass-panel space-y-3">
             <div className="w-8 h-8 border-3 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mx-auto" />
-            <p className="text-xs font-medium text-[var(--text-secondary)]">Loading requests...</p>
+            <p className="text-xs font-medium text-[var(--text-secondary)]">Loading submissions...</p>
           </div>
         ) : filteredRequests.length === 0 ? (
           <div className="p-12 text-center glass-panel space-y-3">
             <div className="w-12 h-12 rounded-2xl bg-[var(--card-bg-to)] border border-[var(--panel-border)] flex items-center justify-center mx-auto text-[var(--text-muted)]">
               <ClipboardCheck className="w-6 h-6" />
             </div>
-            <h3 className="text-sm font-bold text-[var(--text-primary)]">No requests found</h3>
+            <h3 className="text-sm font-bold text-[var(--text-primary)]">No submissions found</h3>
             <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
               {searchQuery
                 ? `No submissions matched "${searchQuery}". Try modifying your search or filters.`
-                : 'There are currently no faculty task or duty requests in this tab.'}
+                : 'There are currently no departmental submissions or directive proofs in this tab.'}
             </p>
           </div>
         ) : (
@@ -555,32 +578,32 @@ export const AdminRequestsPage: React.FC = () => {
               >
                 {/* Header Row */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--panel-border)]">
-                  {/* Faculty Identity */}
+                  {/* Department Head Identity */}
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-emerald-500/20 shrink-0">
-                      {t.assignee?.name?.slice(0, 2).toUpperCase() || 'FA'}
+                      {t.assignee?.department?.slice(0, 2).toUpperCase() || t.assignee?.name?.slice(0, 2).toUpperCase() || 'DH'}
                     </div>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="font-extrabold text-sm sm:text-base text-[var(--text-primary)]">
-                          {t.assignee?.name || 'Faculty Member'}
+                          {t.assignee?.name || 'Department Head'}
                         </h4>
                         {isSubtask ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-500/30">
-                            <ListTree className="w-3 h-3" /> Subtask Review
+                            <ListTree className="w-3 h-3" /> Subtask Deliverable
                           </span>
                         ) : isSelfCreated ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                            <Sparkles className="w-3 h-3" /> Self-Created Task
+                            <Sparkles className="w-3 h-3" /> Department Initiative
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
-                            <FileCheck className="w-3 h-3" /> Assigned Duty Submission
+                            <FileCheck className="w-3 h-3" /> VC Directive Deliverable
                           </span>
                         )}
                       </div>
                       <p className="text-[11px] text-[var(--text-muted)]">
-                        {t.assignee?.designation || 'Faculty'} • {t.assignee?.department || 'Department'} • {t.assignee?.email}
+                        {t.assignee?.department || 'Department Head'} • {t.assignee?.email}
                       </p>
                     </div>
                   </div>
@@ -610,8 +633,8 @@ export const AdminRequestsPage: React.FC = () => {
                       {t.status === 'approved'
                         ? isSubtask ? 'Approved (+0 Pts)' : 'Approved (+10 Pts)'
                         : t.status === 'declined'
-                        ? 'Declined (-3 Pts)'
-                        : 'Awaiting Admin Approval'}
+                        ? 'Returned with Remarks'
+                        : 'Awaiting VC Office Approval'}
                     </span>
                   </div>
                 </div>
@@ -632,7 +655,7 @@ export const AdminRequestsPage: React.FC = () => {
                     <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-400/20 text-xs font-medium text-blue-700 dark:text-blue-300">
                       <Clock className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                       <span>
-                        <strong>Duty Window:</strong> {t.start_date ? new Date(t.start_date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Immediate'} → <strong className="text-amber-600 dark:text-amber-400">{t.due_date ? new Date(t.due_date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Open Deadline'}</strong>
+                        <strong>Timeline:</strong> {t.start_date ? new Date(t.start_date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Immediate'} → <strong className="text-amber-600 dark:text-amber-400">{t.due_date ? new Date(t.due_date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Open Deadline'}</strong>
                       </span>
                     </div>
                   )}
@@ -649,13 +672,86 @@ export const AdminRequestsPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Lined-Up Department Faculty Team */}
+                {t.lined_up_faculty && t.lined_up_faculty.length > 0 && (
+                  <div className="p-3.5 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-2xl border border-emerald-500/20 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                      <span className="flex items-center gap-1.5">
+                        <Users className="w-4 h-4 text-emerald-500" />
+                        Participating Department Faculty Team ({t.lined_up_faculty.length})
+                      </span>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">
+                        +{t.points_reward || 10} pts to each on approval
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {t.lined_up_faculty.map((fac, idx) => (
+                        <div
+                          key={idx}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--panel-bg)] border border-emerald-500/30 text-xs text-[var(--text-primary)] shadow-xs"
+                        >
+                          <div className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[9px] flex items-center justify-center shrink-0">
+                            {fac.faculty_name.charAt(0)}
+                          </div>
+                          <span className="font-semibold">{fac.faculty_name}</span>
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-mono">
+                            {fac.role || 'Coordinator'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Official Completion Report Display */}
+                {t.completion_report && Object.keys(t.completion_report).length > 0 && (
+                  <div className="p-4 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-300 dark:border-blue-900/50 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 text-blue-500" />
+                        Executive Completion Report & Verification
+                      </span>
+                      <span className="text-[10px] text-blue-600 dark:text-blue-300">
+                        {t.completion_report.submitted_at ? new Date(t.completion_report.submitted_at).toLocaleString() : ''}
+                      </span>
+                    </div>
+
+                    {t.completion_report.summary && (
+                      <div className="bg-[var(--panel-bg)]/80 p-3 rounded-xl border border-blue-500/20">
+                        <div className="text-[11px] font-bold text-[var(--text-secondary)] mb-0.5">Execution Summary:</div>
+                        <p className="text-xs text-[var(--text-primary)] leading-relaxed">{t.completion_report.summary}</p>
+                      </div>
+                    )}
+
+                    {t.completion_report.achievements && (
+                      <div className="bg-[var(--panel-bg)]/80 p-3 rounded-xl border border-blue-500/20">
+                        <div className="text-[11px] font-bold text-[var(--text-secondary)] mb-0.5">Key Highlights & Metrics:</div>
+                        <p className="text-xs text-[var(--text-primary)] leading-relaxed">{t.completion_report.achievements}</p>
+                      </div>
+                    )}
+
+                    {t.completion_report.faculty_contributions && (
+                      <div className="bg-[var(--panel-bg)]/80 p-3 rounded-xl border border-blue-500/20">
+                        <div className="text-[11px] font-bold text-[var(--text-secondary)] mb-0.5">Faculty Contributions:</div>
+                        <p className="text-xs text-[var(--text-primary)] leading-relaxed">{t.completion_report.faculty_contributions}</p>
+                      </div>
+                    )}
+
+                    {t.completion_report.file_url && (
+                      <div className="pt-1">
+                        <ProofViewer url={t.completion_report.file_url} fileName={t.completion_report.file_name} />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Proof & File Submission Display */}
-                {latestSub?.file_url && (
+                {latestSub?.file_url && !t.completion_report?.file_url && (
                   <div className="p-4 bg-[var(--card-bg-to)] border border-[var(--panel-border)] rounded-2xl space-y-2.5">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                         <FileText className="w-4 h-4 text-emerald-500" />
-                        Uploaded Task Proof / Proposal File
+                        Uploaded Directive Proof / Deliverable File
                       </span>
                       <span className="text-[10px] text-[var(--text-muted)] font-mono">
                         {latestSub.file_name || 'Attached Proof'}
@@ -668,7 +764,7 @@ export const AdminRequestsPage: React.FC = () => {
                 {/* Submission Description / Notes if different */}
                 {latestSub?.description && latestSub.description !== t.description && (
                   <div className="p-3 bg-slate-500/10 rounded-xl text-xs space-y-1">
-                    <span className="font-bold text-[var(--text-primary)]">Faculty Completion Note:</span>
+                    <span className="font-bold text-[var(--text-primary)]">HOD Deliverable Notes:</span>
                     <p className="text-[var(--text-secondary)]">{latestSub.description}</p>
                   </div>
                 )}
@@ -677,7 +773,7 @@ export const AdminRequestsPage: React.FC = () => {
                 {t.status === 'declined' && latestSub?.review_remarks && (
                   <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs space-y-1">
                     <div className="font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
-                      <AlertCircle className="w-4 h-4" /> Admin Decline Remarks (-3 pts penalty):
+                      <AlertCircle className="w-4 h-4" /> VC Office Return Remarks:
                     </div>
                     <p className="text-[var(--text-primary)]">{latestSub.review_remarks}</p>
                   </div>
@@ -689,9 +785,9 @@ export const AdminRequestsPage: React.FC = () => {
                     <Award className="w-4 h-4 text-amber-500" />
                     <span>
                       {isSubtask ? (
-                        <>Subtask Reward: <strong>+0 Extra Points</strong> upon approval, <strong>-3 Points</strong> if declined</>
+                        <>Subtask Reward: <strong>+0 Extra Points</strong> upon approval</>
                       ) : (
-                        <>Main Task Reward: <strong>+10 Points</strong> upon approval, <strong>-3 Points</strong> if declined</>
+                        <>Direct Reward: <strong>+10 Departmental Points</strong> upon approval</>
                       )}
                     </span>
                   </div>
@@ -707,7 +803,7 @@ export const AdminRequestsPage: React.FC = () => {
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/30 text-xs font-bold transition-all active:scale-95"
                       >
                         <XCircle className="w-4 h-4" />
-                        Decline (-3 pts)
+                        Return with Remarks
                       </button>
                     )}
 
@@ -740,7 +836,7 @@ export const AdminRequestsPage: React.FC = () => {
             <div className="flex items-center justify-between pb-3 border-b border-[var(--panel-border)] mb-4">
               <div className="flex items-center gap-2 text-rose-500 font-extrabold text-base sm:text-lg">
                 <XCircle className="w-5 h-5" />
-                <span>Decline Faculty Submission</span>
+                <span>Return Directive Submission to Department</span>
               </div>
               <button
                 onClick={() => setSelectedTaskForDecline(null)}
@@ -753,26 +849,26 @@ export const AdminRequestsPage: React.FC = () => {
             <form onSubmit={handleDeclineSubmit} className="space-y-4">
               <div className="p-3 rounded-xl bg-[var(--card-bg-to)] border border-[var(--panel-border)] text-xs space-y-1">
                 <p className="font-bold text-[var(--text-primary)]">
-                  {selectedTaskForDecline.parent_task_id ? 'Subtask: ' : 'Task: '}
+                  {selectedTaskForDecline.parent_task_id ? 'Subtask: ' : 'Directive: '}
                   {selectedTaskForDecline.title}
                 </p>
-                <p className="text-[var(--text-muted)]">Faculty: {selectedTaskForDecline.assignee?.name} ({selectedTaskForDecline.assignee?.department})</p>
+                <p className="text-[var(--text-muted)]">Department: {selectedTaskForDecline.assignee?.department || selectedTaskForDecline.assignee?.name} ({selectedTaskForDecline.assignee?.name})</p>
               </div>
 
               <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-700 dark:text-rose-300 flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 shrink-0" />
-                <span><strong>Penalty Warning:</strong> Declining this submission will deduct <strong>-3 points</strong> from {selectedTaskForDecline.assignee?.name || 'the faculty member'}'s performance leaderboard score.</span>
+                <span><strong>Revision Notice:</strong> Returning this directive will prompt the Department Head to revise deliverables and upload corrected proofs.</span>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-bold text-[var(--text-primary)]">
-                    Feedback / Reason for Decline *
+                    Feedback / Reason for Return *
                   </label>
                   <ImproveEnglishButton
                     text={declineRemarks}
                     onImproved={improved => setDeclineRemarks(improved)}
-                    context="Admin rejection feedback for faculty task submission"
+                    context="VC Office rejection feedback for department deliverable submission"
                   />
                 </div>
                 <textarea
@@ -780,7 +876,7 @@ export const AdminRequestsPage: React.FC = () => {
                   rows={4}
                   value={declineRemarks}
                   onChange={e => setDeclineRemarks(e.target.value)}
-                  placeholder="Explain why this task is being declined (e.g., missing proof document, insufficient description, needs date revision)..."
+                  placeholder="Explain why this deliverable needs revision (e.g., missing proof document, incomplete compliance report, needs date revision)..."
                   className="glass-input text-xs w-full leading-relaxed"
                 />
               </div>
@@ -790,10 +886,10 @@ export const AdminRequestsPage: React.FC = () => {
                 <span className="text-[11px] font-bold text-[var(--text-muted)]">Quick Suggestions:</span>
                 <div className="flex flex-wrap gap-1.5">
                   {[
-                    'Please attach valid proof document / photos.',
-                    'Description is insufficient. Please elaborate on duty outcomes.',
-                    'Please update duty timings and venue details.',
-                    'Duplicate task submission.'
+                    'Please attach valid compliance proof document / photos.',
+                    'Deliverable details are insufficient. Please elaborate on outcomes.',
+                    'Please update event budget and attendee report.',
+                    'Duplicate deliverable submission.'
                   ].map((preset, idx) => (
                     <button
                       key={idx}
@@ -821,7 +917,7 @@ export const AdminRequestsPage: React.FC = () => {
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-md shadow-rose-600/20 transition-all active:scale-95"
                 >
                   <XCircle className="w-3.5 h-3.5" />
-                  {actionLoading === selectedTaskForDecline.id ? 'Declining...' : 'Confirm Decline'}
+                  {actionLoading === selectedTaskForDecline.id ? 'Submitting...' : 'Confirm Return'}
                 </button>
               </div>
             </form>

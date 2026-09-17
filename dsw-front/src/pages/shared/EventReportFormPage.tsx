@@ -1528,7 +1528,7 @@ export const EventReportFormPage: React.FC = () => {
                     type="text"
                     value={headOfSchoolSignature}
                     onChange={(e) => setHeadOfSchoolSignature(e.target.value)}
-                    placeholder="Head of School / Dean"
+                    placeholder="Head of Department (HOD)"
                     className="glass-input text-center text-xs font-bold"
                   />
                   <div className="pt-2 border-t border-[var(--panel-border)]">

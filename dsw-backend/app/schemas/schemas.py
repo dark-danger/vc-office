@@ -139,6 +139,28 @@ class FacultyStatsOut(BaseModel):
 
 
 # --- TASK SCHEMAS ---
+class LinedUpFacultyMember(BaseModel):
+    faculty_id: int
+    faculty_name: str
+    employee_id: Optional[str] = None
+    role: Optional[str] = "Assigned Faculty"
+    designation: Optional[str] = None
+    email: Optional[str] = None
+    duty_status: Optional[str] = "assigned" # assigned, completed, in_progress
+
+class TaskLineupUpdate(BaseModel):
+    lined_up_faculty: List[dict]
+
+class TaskCompletionReportCreate(BaseModel):
+    summary: Optional[str] = None
+    achievements: Optional[str] = None
+    faculty_contributions: Optional[str] = None
+    file_url: Optional[str] = None
+    file_name: Optional[str] = None
+    file_type: Optional[str] = None
+    file_size: Optional[int] = None
+    lined_up_faculty: Optional[List[dict]] = None
+
 class TaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
@@ -156,7 +178,7 @@ class TaskCreate(BaseModel):
     file_name: Optional[str] = None
     file_type: Optional[str] = None
     file_size: Optional[int] = None
-
+    lined_up_faculty: Optional[List[dict]] = None
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
@@ -167,6 +189,8 @@ class TaskUpdate(BaseModel):
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     priority: Optional[TaskPriority] = None
+    lined_up_faculty: Optional[List[dict]] = None
+    completion_report: Optional[dict] = None
 
 class TaskSubmissionOut(BaseModel):
     id: int
@@ -208,6 +232,8 @@ class TaskOut(BaseModel):
     priority: TaskPriority
     status: TaskStatus
     created_at: datetime
+    lined_up_faculty: Optional[List[dict]] = []
+    completion_report: Optional[dict] = None
     submissions: List[TaskSubmissionOut] = []
     subtasks: List["TaskOut"] = []
 
@@ -220,6 +246,9 @@ class TaskSubmissionCreate(BaseModel):
     file_type: Optional[str] = None
     file_name: Optional[str] = None
     file_size: Optional[int] = None
+    lined_up_faculty: Optional[List[dict]] = None
+    achievements: Optional[str] = None
+    faculty_contributions: Optional[str] = None
 
 class TaskReviewPayload(BaseModel):
     review_remarks: Optional[str] = None

@@ -13,20 +13,17 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('Admin@12345');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<'admin' | 'head' | 'faculty'>('admin');
+  const [selectedRole, setSelectedRole] = useState<'admin' | 'head'>('admin');
 
-  const setRolePreset = (role: 'admin' | 'head' | 'faculty') => {
+  const setRolePreset = (role: 'admin' | 'head') => {
     setSelectedRole(role);
     setError('');
     if (role === 'admin') {
       setEmail('admin@geeta.edu.in');
       setPassword('Admin@12345');
-    } else if (role === 'head') {
+    } else {
       setEmail('head.cse@geeta.edu.in');
       setPassword('GU1001');
-    } else {
-      setEmail('faculty@geeta.edu.in');
-      setPassword('Faculty@12345');
     }
   };
 
@@ -39,13 +36,11 @@ export const LoginPage: React.FC = () => {
       const data = await apiRequest('/auth/login', 'POST', { email, password });
       login(data.access_token, data.refresh_token, data.user);
 
-      // 3-Way Auto-redirect based on authenticated user's role
+      // 2-Way Auto-redirect based on authenticated user's role
       if (data.user.role === 'super_admin') {
         navigate('/admin/dashboard');
-      } else if (data.user.role === 'department_head') {
-        navigate('/head/dashboard');
       } else {
-        navigate('/faculty/dashboard');
+        navigate('/head/dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check credentials.');
@@ -83,19 +78,19 @@ export const LoginPage: React.FC = () => {
             Geeta University VC Office Portal
           </span>
           <h2 className="text-2xl font-extrabold text-[var(--text-primary)] tracking-tight font-display">
-            3-Way Governance Login
+            Executive Governance Login
           </h2>
           <p className="text-xs text-[var(--text-secondary)] font-medium">
-            Select your governance role or enter your institutional credentials
+            Sign in as VC Office Executive or Department Head (HOD)
           </p>
         </div>
 
-        {/* 3 Role Preset Selectors */}
-        <div className="grid grid-cols-3 gap-2 p-1 rounded-xl bg-black/20 border border-[var(--panel-border)]">
+        {/* 2 Role Preset Selectors */}
+        <div className="grid grid-cols-2 gap-2.5 p-1 rounded-xl bg-black/20 border border-[var(--panel-border)]">
           <button
             type="button"
             onClick={() => setRolePreset('admin')}
-            className={`py-2 px-1.5 rounded-lg text-[11px] font-extrabold flex flex-col items-center justify-center gap-1 transition-all ${
+            className={`py-2 px-2 rounded-lg text-xs font-extrabold flex items-center justify-center gap-2 transition-all ${
               selectedRole === 'admin'
                 ? 'bg-emerald-500 text-slate-950 shadow-md'
                 : 'text-[var(--text-secondary)] hover:text-white'
@@ -107,7 +102,7 @@ export const LoginPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setRolePreset('head')}
-            className={`py-2 px-1.5 rounded-lg text-[11px] font-extrabold flex flex-col items-center justify-center gap-1 transition-all ${
+            className={`py-2 px-2 rounded-lg text-xs font-extrabold flex items-center justify-center gap-2 transition-all ${
               selectedRole === 'head'
                 ? 'bg-emerald-500 text-slate-950 shadow-md'
                 : 'text-[var(--text-secondary)] hover:text-white'
@@ -115,18 +110,6 @@ export const LoginPage: React.FC = () => {
           >
             <Building2 className="w-4 h-4" />
             <span>Dept Head</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setRolePreset('faculty')}
-            className={`py-2 px-1.5 rounded-lg text-[11px] font-extrabold flex flex-col items-center justify-center gap-1 transition-all ${
-              selectedRole === 'faculty'
-                ? 'bg-emerald-500 text-slate-950 shadow-md'
-                : 'text-[var(--text-secondary)] hover:text-white'
-            }`}
-          >
-            <User className="w-4 h-4" />
-            <span>Faculty</span>
           </button>
         </div>
 

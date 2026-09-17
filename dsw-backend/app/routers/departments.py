@@ -255,7 +255,7 @@ async def bulk_onboard_faculty_for_department(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Bulk create faculty accounts for a specific department with auto-generated passwords matching Employee ID."""
+    """Bulk create faculty accounts with auto-generated passwords matching Employee ID, with support for multi-department resolution."""
     dept = await db.get(Department, id)
     if not dept:
         raise HTTPException(status_code=404, detail="Department not found")
@@ -264,6 +264,15 @@ async def bulk_onboard_faculty_for_department(
     if current_user.role != UserRole.super_admin:
         if current_user.role != UserRole.department_head or current_user.department_id != dept.id:
             raise HTTPException(status_code=403, detail="Only VC Office or the Department Head can onboard faculty here.")
+
+    # Pre-fetch all active departments for intelligent row-level department mapping
+    all_depts_res = await db.execute(select(Department).filter(Department.is_active == True))
+    all_depts = all_depts_res.scalars().all()
+    dept_map = {}
+    for d in all_depts:
+        dept_map[d.id] = d
+        dept_map[d.code.strip().lower()] = d
+        dept_map[d.name.strip().lower()] = d
 
     created_accounts: List[FacultyCredentialItem] = []
     errors: List[str] = []
@@ -277,6 +286,19 @@ async def bulk_onboard_faculty_for_department(
             skipped_count += 1
             continue
 
+        # Resolve row-specific department if specified (for master CSV uploads)
+        target_row_dept = dept
+        if row.department:
+            dept_key = row.department.strip().lower()
+            if dept_key in dept_map:
+                target_row_dept = dept_map[dept_key]
+            else:
+                # Try partial match
+                for d in all_depts:
+                    if dept_key in d.name.lower() or d.code.lower() in dept_key:
+                        target_row_dept = d
+                        break
+
         # Determine email: provided or <emp_id>@geeta.edu.in
         email = (row.email or f"{emp_id.lower()}@geeta.edu.in").strip().lower()
         
@@ -286,10 +308,10 @@ async def bulk_onboard_faculty_for_department(
         )
         existing_user = existing_res.scalar_one_or_none()
         if existing_user:
-            # Update department linkage if unlinked
+            # Update department linkage if unlinked or different
             if not existing_user.department_id:
-                existing_user.department_id = dept.id
-                existing_user.department = dept.name
+                existing_user.department_id = target_row_dept.id
+                existing_user.department = target_row_dept.name
             skipped_count += 1
             continue
 
@@ -303,8 +325,8 @@ async def bulk_onboard_faculty_for_department(
             phone=row.phone,
             password_hash=hashed_pwd,
             role=UserRole.faculty,
-            department_id=dept.id,
-            department=dept.name,
+            department_id=target_row_dept.id,
+            department=target_row_dept.name,
             designation=row.designation or "Assistant Professor",
             employee_id=emp_id,
             is_active=True,
@@ -320,7 +342,7 @@ async def bulk_onboard_faculty_for_department(
                 email=new_user.email,
                 employee_id=new_user.employee_id,
                 designation=new_user.designation or "Assistant Professor",
-                department=dept.name,
+                department=target_row_dept.name,
                 initial_password=initial_pwd
             )
         )

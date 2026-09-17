@@ -336,7 +336,7 @@ export const TaskProofSubmitter: React.FC<TaskProofSubmitterProps> = ({
           title={`Upload folder: ${targetFolderId}`}
         >
           <FolderGit2 className="w-3.5 h-3.5 shrink-0" />
-          <span>Drive Folder: <strong>DSW Tasks Upload</strong></span>
+          <span>Drive Folder: <strong>VC Office Tasks Repository</strong></span>
           <ExternalLink className="w-2.5 h-2.5 shrink-0" />
         </a>
       </div>

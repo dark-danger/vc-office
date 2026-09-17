@@ -79,17 +79,19 @@ export const LandingPage: React.FC = () => {
           </h1>
 
           <p className="text-xs sm:text-base text-[var(--text-secondary)] max-w-2xl mx-auto font-medium leading-relaxed">
-            Centralized platform for Geeta University executive governance and faculty coordination. Track assigned departmental tasks, manage institutional events, review compliance reports, and monitor university excellence.
+            Centralized platform for Geeta University executive governance and Department Head coordination. Track assigned departmental directives, manage institutional events, review compliance reports, and monitor university excellence.
           </p>
 
           <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 pt-2 sm:pt-4 w-full sm:w-auto">
-            <button onClick={() => navigate('/login')} className="btn-primary text-sm sm:text-base px-6 sm:px-8 py-3 w-full sm:w-auto justify-center">
-              Executive & Faculty Sign In
-              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
+            <button onClick={() => navigate('/vc/login')} className="btn-primary text-sm sm:text-base px-6 sm:px-8 py-3 w-full sm:w-auto justify-center shadow-lg shadow-emerald-500/20">
+              <Shield className="w-4 h-4 sm:w-5 sm:h-5 mr-1" />
+              VC Office Portal Sign In
+              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 ml-1" />
             </button>
-            <a href="#events" className="btn-secondary text-sm sm:text-base px-6 sm:px-8 py-3 w-full sm:w-auto justify-center text-center">
-              Upcoming Events & Directives
-            </a>
+            <button onClick={() => navigate('/head/login')} className="btn-secondary text-sm sm:text-base px-6 sm:px-8 py-3 w-full sm:w-auto justify-center">
+              <CheckSquare className="w-4 h-4 sm:w-5 sm:h-5 mr-1 text-emerald-400" />
+              Department Head Portal
+            </button>
           </div>
         </div>
       </section>
@@ -97,50 +99,50 @@ export const LandingPage: React.FC = () => {
       {/* Feature Showcase Grid */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-8 sm:space-y-12">
         <div className="text-center space-y-2">
-          <h2 className="text-3xl font-extrabold text-[var(--text-primary)] font-display">Institutional Pillars</h2>
-          <p className="text-xs text-[var(--text-secondary)]">Driving academic excellence, institutional research, and faculty coordination</p>
+          <h2 className="text-3xl font-extrabold text-[var(--text-primary)] font-display">Institutional Governance Pillars</h2>
+          <p className="text-xs text-[var(--text-secondary)]">Driving executive mandates, academic excellence, and departmental leadership</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Card 1: Faculty Task Directives */}
-          <div className="glass-card p-6 relative overflow-hidden group border-emerald-500/30">
+          {/* Card 1: VC Office Governance */}
+          <div className="glass-card p-6 relative overflow-hidden group border-emerald-500/30 hover:border-emerald-500/60 transition-all cursor-pointer" onClick={() => navigate('/vc/login')}>
             <div className="p-3 w-12 h-12 rounded-xl bg-emerald-500/15 text-emerald-500 mb-4 flex items-center justify-center border border-emerald-500/30">
-              <CheckSquare className="w-6 h-6" />
+              <Shield className="w-6 h-6" />
             </div>
-            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">Faculty Task Governance</h3>
+            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">VC Office Executive Portal</h3>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">
-              Direct assignment of administrative duties, event oversight, proof verification, and automated staff performance scoring.
+              Institutional command center: issue university-wide directives, approve HOD deliverables, monitor university rankings, and manage staff rosters.
             </p>
             <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              Accountability & Progress <Sparkles className="w-3.5 h-3.5" />
+              Enter VC Portal <ArrowRight className="w-3.5 h-3.5" />
             </span>
           </div>
 
-          {/* Card 2: Institutional Events */}
-          <div className="glass-card p-6 relative overflow-hidden group border-teal-500/30">
+          {/* Card 2: Department Head Directives */}
+          <div className="glass-card p-6 relative overflow-hidden group border-teal-500/30 hover:border-teal-500/60 transition-all cursor-pointer" onClick={() => navigate('/head/login')}>
             <div className="p-3 w-12 h-12 rounded-xl bg-teal-500/15 text-teal-600 dark:text-teal-400 mb-4 flex items-center justify-center border border-teal-500/30">
-              <Calendar className="w-6 h-6" />
+              <CheckSquare className="w-6 h-6" />
             </div>
-            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">University Events & Calendar</h3>
+            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">Department Head Portal</h3>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">
-              University convocation, academic symposiums, national conferences, and departmental seminars.
+              Receive official VC mandates, execute departmental tasks, upload proof documentation, and track department leaderboard points.
             </p>
             <span className="text-xs font-semibold text-teal-600 dark:text-teal-300 flex items-center gap-1">
-              Institutional Calendar 2026 <Trophy className="w-3.5 h-3.5" />
+              Enter HOD Portal <ArrowRight className="w-3.5 h-3.5" />
             </span>
           </div>
 
           {/* Card 3: Compliance & Reporting */}
           <div className="glass-card p-6 relative overflow-hidden group border-emerald-500/30">
             <div className="p-3 w-12 h-12 rounded-xl bg-emerald-500/15 text-emerald-500 mb-4 flex items-center justify-center border border-emerald-500/30">
-              <Shield className="w-6 h-6" />
+              <Award className="w-6 h-6" />
             </div>
             <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">Compliance & Reporting</h3>
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">
-              Standardized 7-page institutional event reports with automated budget reconciliations and verified outcomes.
+              Standardized 7-page institutional event reports with automated budget reconciliations and verified university outcomes.
             </p>
             <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              Geeta University Standard <Award className="w-3.5 h-3.5" />
+              Geeta University Standard <Sparkles className="w-3.5 h-3.5" />
             </span>
           </div>
         </div>

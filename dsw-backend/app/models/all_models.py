@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Optional, List, Dict, Any
 from sqlalchemy import String, Integer, Boolean, Text, DateTime, ForeignKey, Enum, Float, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
@@ -142,6 +143,10 @@ class Task(Base):
     assigned_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     assigned_by_role: Mapped[str] = mapped_column(String(50), default="super_admin") # super_admin, department_head
     points_reward: Mapped[int] = mapped_column(Integer, default=10)
+    
+    # Faculty Lineup & Completion Report
+    lined_up_faculty: Mapped[Optional[list]] = mapped_column(JSON, default=list, nullable=True) # list of {faculty_id, faculty_name, employee_id, role, designation, duty_status}
+    completion_report: Mapped[Optional[dict]] = mapped_column(JSON, default=dict, nullable=True) # {summary, achievements, faculty_contributions, file_url, etc.}
     
     start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     due_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)

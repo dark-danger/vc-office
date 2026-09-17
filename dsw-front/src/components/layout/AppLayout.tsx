@@ -15,7 +15,7 @@ export const AppLayout: React.FC<{ allowedRoles: string[]; pageTitle: string }> 
     return (
       <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[var(--bg-primary)] text-[var(--text-primary)]">
         <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <div className="text-sm font-medium text-[var(--text-secondary)]">Loading DSW Portal...</div>
+        <div className="text-sm font-medium text-[var(--text-secondary)]">Loading VC Office Portal...</div>
       </div>
     );
   }
@@ -28,9 +28,7 @@ export const AppLayout: React.FC<{ allowedRoles: string[]; pageTitle: string }> 
     // Redirect to default route per role
     const dest = user.role === 'super_admin' 
       ? '/admin/dashboard' 
-      : user.role === 'department_head' 
-      ? '/head/dashboard' 
-      : '/faculty/dashboard';
+      : '/head/dashboard';
     return <Navigate to={dest} replace />;
   }
 
