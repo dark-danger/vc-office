@@ -801,6 +801,9 @@ class ClubRankingOut(BaseModel):
 class EventReportCreate(BaseModel):
     event_id: Optional[int] = None
     status: Optional[str] = "draft"
+    report_type: Optional[str] = "event_report"
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
     category: Optional[str] = None
     sub_category: Optional[str] = None
     sdg_mapping: Optional[str] = None
@@ -859,6 +862,9 @@ class EventReportCreate(BaseModel):
 class EventReportUpdate(BaseModel):
     event_id: Optional[int] = None
     status: Optional[str] = None
+    report_type: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
     category: Optional[str] = None
     sub_category: Optional[str] = None
     sdg_mapping: Optional[str] = None
@@ -912,6 +918,14 @@ class EventReportUpdate(BaseModel):
     coordinator_signature: Optional[str] = None
     head_of_school_signature: Optional[str] = None
     dsw_verified_by: Optional[str] = None
+    review_remarks: Optional[str] = None
+
+
+class EventReportReviewPayload(BaseModel):
+    action: str  # approve, needs_revision, reject
+    review_remarks: Optional[str] = None
+    points_awarded: Optional[int] = 0
+    dsw_verified_by: Optional[str] = None
 
 
 class EventReportOut(BaseModel):
@@ -919,6 +933,9 @@ class EventReportOut(BaseModel):
     event_id: Optional[int] = None
     event_title: Optional[str] = None
     status: str
+    report_type: Optional[str] = "event_report"
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
     category: Optional[str] = None
     sub_category: Optional[str] = None
     sdg_mapping: Optional[str] = None
@@ -973,8 +990,19 @@ class EventReportOut(BaseModel):
     head_of_school_signature: Optional[str] = None
     dsw_verified_by: Optional[str] = None
 
+    # Submission & Review
+    submitted_at: Optional[datetime] = None
+    reviewed_by: Optional[int] = None
+    reviewer_name: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    review_status: Optional[str] = "draft"
+    review_remarks: Optional[str] = None
+    points_awarded: Optional[int] = 0
+
     created_by: int
     creator_name: Optional[str] = None
+    creator_email: Optional[str] = None
+    creator_employee_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

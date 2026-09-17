@@ -29,7 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     { label: 'Departments', path: '/admin/departments', icon: <Building2 className="w-4 h-4 text-blue-400" /> },
     { label: 'HODs', path: '/admin/hods', icon: <ShieldCheck className="w-4 h-4 text-emerald-400" /> },
     { label: 'Faculties', path: '/admin/faculty', icon: <Users className="w-4 h-4 text-cyan-400" /> },
-    { label: 'Official Reports', path: '/admin/events/reports', icon: <FileText className="w-4 h-4 text-amber-400" /> },
+    { label: 'Official Reports & Reviews', path: '/admin/events/reports', icon: <FileText className="w-4 h-4 text-amber-400" /> },
     { label: 'Department Leaderboard', path: '/admin/department-leaderboard', icon: <Trophy className="w-4 h-4 text-amber-400" /> },
     { label: 'Staff Leaderboard', path: '/admin/leaderboard/staff', icon: <Medal className="w-4 h-4 text-emerald-400" /> },
     { label: 'Announcements', path: '/admin/announcements', icon: <Megaphone className="w-4 h-4 text-purple-400" /> },
@@ -42,7 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     { label: 'Tasks & Directives', path: '/head/tasks', icon: <CheckSquare className="w-4 h-4 text-teal-400" /> },
     { label: 'Department Leaderboard', path: '/head/department-leaderboard', icon: <Trophy className="w-4 h-4 text-amber-400" /> },
     { label: 'Staff Leaderboard', path: '/head/leaderboard', icon: <Medal className="w-4 h-4 text-emerald-400" /> },
-    { label: 'Official Reports', path: '/head/events/reports', icon: <FileText className="w-4 h-4 text-amber-400" /> },
+    { label: 'Report Submissions', path: '/head/events/reports', icon: <FileText className="w-4 h-4 text-amber-400" /> },
     { label: 'Announcements', path: '/head/announcements', icon: <Megaphone className="w-4 h-4 text-purple-400" /> },
     { label: 'Queries', path: '/head/queries', icon: <HelpCircle className="w-4 h-4 text-rose-400" /> },
   ];

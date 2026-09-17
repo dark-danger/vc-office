@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { apiRequest } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { FileUploadField } from '../../components/events/FileUploadField';
@@ -26,11 +26,17 @@ import {
   Users,
   Image as ImageIcon,
   Award,
-  BookOpen,
   ArrowLeft,
   X,
   Eye,
-  Info
+  Info,
+  AlertCircle,
+  ShieldCheck,
+  Building2,
+  Trophy,
+  MessageSquare,
+  BookOpen,
+  Clock
 } from 'lucide-react';
 
 interface EventItem {
@@ -48,7 +54,11 @@ export const EventReportFormPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const eventIdParam = searchParams.get('eventId');
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
+
+  const isHeadPortal = location.pathname.startsWith('/head') || user?.role === 'department_head';
+  const basePath = isHeadPortal ? '/head/events/reports' : '/admin/events/reports';
 
   const [activeTab, setActiveTab] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(false);
@@ -59,13 +69,33 @@ export const EventReportFormPage: React.FC = () => {
   // Form State
   const [eventId, setEventId] = useState<number | null>(eventIdParam ? Number(eventIdParam) : null);
   const [reportStatus, setReportStatus] = useState<string>('draft');
+  const [reportType, setReportType] = useState<string>('event_report');
+  const [departmentId, setDepartmentId] = useState<number | null>(user?.department_id || null);
+  const [departmentName, setDepartmentName] = useState<string>(user?.department || '');
+
+  // Review & Submission state
+  const [submittedAt, setSubmittedAt] = useState<string | null>(null);
+  const [reviewedBy, setReviewedBy] = useState<number | null>(null);
+  const [reviewerName, setReviewerName] = useState<string | null>(null);
+  const [reviewedAt, setReviewedAt] = useState<string | null>(null);
+  const [reviewStatus, setReviewStatus] = useState<string>('draft');
+  const [reviewRemarks, setReviewRemarks] = useState<string>('');
+  const [pointsAwarded, setPointsAwarded] = useState<number>(0);
+
+  // Review Modal / Action for Super Admin
+  const [showReviewModal, setShowReviewModal] = useState<boolean>(false);
+  const [reviewAction, setReviewAction] = useState<'approve' | 'needs_revision' | 'reject'>('approve');
+  const [adminReviewRemarks, setAdminReviewRemarks] = useState<string>('');
+  const [adminPointsAwarded, setAdminPointsAwarded] = useState<number>(25);
+  const [adminDswVerifiedBy, setAdminDswVerifiedBy] = useState<string>(user?.name ? `VC Office Verified (${user.name})` : 'VC Office Official Reviewer');
+  const [submittingReview, setSubmittingReview] = useState<boolean>(false);
 
   // Page 1: Identification & SDGs
   const [category, setCategory] = useState<string>('1. Academic & Learning Enhancement');
   const [subCategory, setSubCategory] = useState<string>('Guest Lectures / Expert Sessions');
   const [sdgMapping, setSdgMapping] = useState<string>('SDG 4: Quality Education');
   const [eventName, setEventName] = useState<string>('');
-  const [organizedBy, setOrganizedBy] = useState<string>('Department of Student Welfare');
+  const [organizedBy, setOrganizedBy] = useState<string>(user?.department || 'Department of Student Welfare');
   const [sponsorshipOrgs, setSponsorshipOrgs] = useState<string>('');
   const [coordinatorName, setCoordinatorName] = useState<string>(user?.name || '');
   const [fromDate, setFromDate] = useState<string>('');
@@ -138,11 +168,22 @@ export const EventReportFormPage: React.FC = () => {
           if (rep) {
             setEventId(rep.event_id || null);
             setReportStatus(rep.status || 'draft');
+            setReportType(rep.report_type || 'event_report');
+            setDepartmentId(rep.department_id || user?.department_id || null);
+            setDepartmentName(rep.department_name || user?.department || '');
+            setSubmittedAt(rep.submitted_at || null);
+            setReviewedBy(rep.reviewed_by || null);
+            setReviewerName(rep.reviewer_name || null);
+            setReviewedAt(rep.reviewed_at || null);
+            setReviewStatus(rep.review_status || rep.status || 'draft');
+            setReviewRemarks(rep.review_remarks || '');
+            setPointsAwarded(rep.points_awarded || 0);
+
             setCategory(rep.category || '1. Academic & Learning Enhancement');
             setSubCategory(rep.sub_category || '');
             setSdgMapping(rep.sdg_mapping || '');
             setEventName(rep.event_name || '');
-            setOrganizedBy(rep.organized_by || '');
+            setOrganizedBy(rep.organized_by || rep.department_name || '');
             setSponsorshipOrgs(rep.sponsorship_orgs || '');
             setCoordinatorName(rep.coordinator_name || '');
             setFromDate(rep.from_date || '');
@@ -261,6 +302,9 @@ export const EventReportFormPage: React.FC = () => {
     const payload = {
       event_id: eventId,
       status: statusOverride || reportStatus,
+      report_type: reportType,
+      department_id: departmentId || user?.department_id,
+      department_name: departmentName || user?.department,
       category,
       sub_category: subCategory,
       sdg_mapping: sdgMapping,
@@ -318,17 +362,59 @@ export const EventReportFormPage: React.FC = () => {
 
     try {
       if (id && id !== 'new') {
-        await apiRequest(`/event-reports/${id}`, 'PATCH', payload);
-        alert(statusOverride === 'submitted' ? 'Official Event Report Submitted Successfully!' : 'Report Saved as Draft!');
+        const updated = await apiRequest<any>(`/event-reports/${id}`, 'PATCH', payload);
+        setReportStatus(updated.status);
+        setReviewStatus(updated.review_status);
+        alert(statusOverride === 'submitted' ? 'Official Event Report Submitted to VC Office for Review!' : 'Report Saved as Draft!');
       } else {
         const created = await apiRequest<any>('/event-reports', 'POST', payload);
         alert(statusOverride === 'submitted' ? 'Official Event Report Submitted Successfully!' : 'Report Created Successfully!');
-        navigate(`/admin/events/reports/${created.id}`);
+        navigate(`${basePath}/${created.id}`);
       }
     } catch (err: any) {
       alert(`Error saving report: ${err.message || err}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleExecuteAdminReview = async () => {
+    if (!id || id === 'new') return;
+    if ((reviewAction === 'needs_revision' || reviewAction === 'reject') && !adminReviewRemarks.trim()) {
+      alert('Please provide review feedback remarks.');
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      const payload = {
+        action: reviewAction,
+        review_remarks: adminReviewRemarks,
+        points_awarded: reviewAction === 'approve' ? Number(adminPointsAwarded) || 0 : 0,
+        dsw_verified_by: adminDswVerifiedBy
+      };
+
+      const updated = await apiRequest<any>(`/event-reports/${id}/review`, 'POST', payload);
+      setReportStatus(updated.status);
+      setReviewStatus(updated.review_status);
+      setReviewRemarks(updated.review_remarks || '');
+      setReviewerName(updated.reviewer_name);
+      setReviewedAt(updated.reviewed_at);
+      setPointsAwarded(updated.points_awarded || 0);
+      setDswVerifiedBy(updated.dsw_verified_by || '');
+      setShowReviewModal(false);
+
+      alert(
+        reviewAction === 'approve' 
+          ? `Report Approved & Verified! ${adminPointsAwarded > 0 ? `(+${adminPointsAwarded} points credited to department)` : ''}`
+          : reviewAction === 'needs_revision'
+          ? 'Revision request sent to submitter.'
+          : 'Report rejected.'
+      );
+    } catch (err: any) {
+      alert(`Failed to review report: ${err.message || err}`);
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -348,15 +434,20 @@ export const EventReportFormPage: React.FC = () => {
 
   const currentCategoryData = ANNEXURE_1_DATA.find(a => a.category === category) || ANNEXURE_1_DATA[0];
 
+  const isSubmitted = reportStatus === 'submitted' || reviewStatus === 'pending_review';
+  const isApproved = reportStatus === 'approved' || reviewStatus === 'approved';
+  const isNeedsRevision = reportStatus === 'needs_revision' || reviewStatus === 'needs_revision';
+  const isSuperAdmin = user?.role === 'super_admin';
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 space-y-6">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 space-y-6 max-w-7xl mx-auto pb-24">
       {/* Header Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-[var(--panel-border)] p-5 rounded-3xl shadow-sm">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate(-1)}
-            className="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
-            title="Go Back"
+            onClick={() => navigate(basePath)}
+            className="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all shrink-0"
+            title="Go Back to Reports List"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -371,9 +462,12 @@ export const EventReportFormPage: React.FC = () => {
                 Official Geeta University Format
               </span>
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
-                reportStatus === 'submitted' ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                isApproved ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' :
+                isSubmitted ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse' :
+                isNeedsRevision ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30' :
+                'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
               }`}>
-                {reportStatus}
+                {isApproved ? '✓ Approved' : isSubmitted ? '⏳ Submitted for Review' : isNeedsRevision ? '⚠️ Revision Required' : 'Draft'}
               </span>
             </div>
             <h1 className="text-xl md:text-2xl font-black text-[var(--text-primary)] mt-1">
@@ -389,14 +483,30 @@ export const EventReportFormPage: React.FC = () => {
           >
             <BookOpen className="w-4 h-4" /> Annexure-1 Guide
           </button>
+          
           {id && id !== 'new' && (
             <button
               onClick={handleOpenPrintPreview}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-md shadow-purple-600/20"
             >
-              <Printer className="w-4 h-4" /> Official Printable PDF
+              <Printer className="w-4 h-4" /> Printable PDF
             </button>
           )}
+
+          {/* Super Admin Review Trigger */}
+          {isSuperAdmin && id && id !== 'new' && (
+            <button
+              onClick={() => {
+                setAdminReviewRemarks(reviewRemarks || '');
+                setAdminPointsAwarded(pointsAwarded || 25);
+                setShowReviewModal(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-lg shadow-purple-600/20"
+            >
+              <ShieldCheck className="w-4 h-4" /> Review Submission
+            </button>
+          )}
+
           <button
             onClick={() => handleSave('draft')}
             disabled={saving}
@@ -404,15 +514,67 @@ export const EventReportFormPage: React.FC = () => {
           >
             <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Draft'}
           </button>
+
           <button
             onClick={() => handleSave('submitted')}
             disabled={saving}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-lg shadow-emerald-600/20"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
           >
-            <Send className="w-4 h-4" /> Submit Report
+            <Send className="w-4 h-4" /> {isNeedsRevision ? 'Re-Submit Report' : 'Submit to VC Office'}
           </button>
         </div>
       </div>
+
+      {/* STATUS ALERT BANNERS */}
+      {isNeedsRevision && (
+        <div className="p-5 rounded-3xl bg-rose-500/10 border border-rose-500/40 text-rose-300 flex items-start gap-4 shadow-md animate-fade-in">
+          <AlertCircle className="w-6 h-6 text-rose-400 shrink-0 mt-0.5" />
+          <div className="space-y-1 flex-1">
+            <div className="font-extrabold text-sm text-rose-400 flex items-center justify-between">
+              <span>Revision Requested by VC Office ({reviewerName || 'Administrator'})</span>
+              {reviewedAt && <span className="text-xs font-normal text-rose-300/80">{new Date(reviewedAt).toLocaleString()}</span>}
+            </div>
+            <p className="text-xs text-[var(--text-primary)] bg-black/20 p-3 rounded-2xl border border-rose-500/30">
+              "{reviewRemarks || 'Please review information and re-submit for official approval.'}"
+            </p>
+            <p className="text-[11px] text-rose-300 font-medium pt-1">
+              Please update the required fields according to feedback, then click <strong>"Re-Submit Report"</strong> above.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isApproved && (
+        <div className="p-5 rounded-3xl bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 flex items-start gap-4 shadow-md animate-fade-in">
+          <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="space-y-1 flex-1">
+            <div className="font-extrabold text-sm text-emerald-400 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                Officially Verified & Approved
+                {pointsAwarded ? <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-xs border border-amber-500/30">+{pointsAwarded} pts awarded</span> : null}
+              </span>
+              {reviewedAt && <span className="text-xs font-normal text-emerald-300/80">{new Date(reviewedAt).toLocaleString()}</span>}
+            </div>
+            <p className="text-xs text-[var(--text-primary)]">
+              Verified By: <strong>{dswVerifiedBy || reviewerName || 'VC Office Official Reviewer'}</strong>
+            </p>
+            {reviewRemarks && (
+              <p className="text-xs italic text-emerald-200 bg-black/20 p-2.5 rounded-xl mt-1">
+                "{reviewRemarks}"
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isSubmitted && !isApproved && !isNeedsRevision && (
+        <div className="p-4 rounded-3xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-3 shadow-xs">
+          <Clock className="w-5 h-5 text-amber-400 shrink-0 animate-pulse" />
+          <div className="text-xs">
+            <strong>Submission Received:</strong> This official report was submitted on {submittedAt ? new Date(submittedAt).toLocaleString() : 'recently'} and is currently pending review by the VC Office / DSW.
+          </div>
+        </div>
+      )}
 
       {/* Progress Tabs matching the 5-page official document */}
       <div className="flex overflow-x-auto no-scrollbar gap-2 bg-white dark:bg-slate-900 p-2 rounded-2xl border border-[var(--panel-border)] shadow-xs">
@@ -1685,6 +1847,180 @@ export const EventReportFormPage: React.FC = () => {
               title="Official Event Report"
               className="w-full flex-1 border-none bg-white"
             />
+          </div>
+        </div>
+      )}
+
+      {/* VC Review Modal for Super Admin */}
+      {showReviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-[var(--panel-border)] rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 relative overflow-hidden">
+            <div className="flex items-center justify-between pb-4 border-b border-[var(--panel-border)]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-purple-500/20 flex items-center justify-center text-purple-400">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-[var(--text-primary)]">VC Office Official Report Review</h3>
+                  <p className="text-xs text-[var(--text-secondary)]">Review submission for "{eventName || 'Untitled Report'}"</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowReviewModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Review Decision Select */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">
+                Review Decision / Action
+              </label>
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setReviewAction('approve')}
+                  className={`p-3.5 rounded-2xl font-bold text-xs flex flex-col items-center gap-1.5 border transition-all ${
+                    reviewAction === 'approve'
+                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-md'
+                      : 'bg-slate-50 dark:bg-slate-800/40 border-[var(--panel-border)] text-[var(--text-secondary)] hover:border-emerald-500/40'
+                  }`}
+                >
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  <span>Approve & Verify</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setReviewAction('needs_revision')}
+                  className={`p-3.5 rounded-2xl font-bold text-xs flex flex-col items-center gap-1.5 border transition-all ${
+                    reviewAction === 'needs_revision'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-400 shadow-md'
+                      : 'bg-slate-50 dark:bg-slate-800/40 border-[var(--panel-border)] text-[var(--text-secondary)] hover:border-amber-500/40'
+                  }`}
+                >
+                  <AlertCircle className="w-5 h-5 text-amber-400" />
+                  <span>Request Revision</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setReviewAction('reject')}
+                  className={`p-3.5 rounded-2xl font-bold text-xs flex flex-col items-center gap-1.5 border transition-all ${
+                    reviewAction === 'reject'
+                      ? 'bg-rose-500/20 border-rose-500 text-rose-400 shadow-md'
+                      : 'bg-slate-50 dark:bg-slate-800/40 border-[var(--panel-border)] text-[var(--text-secondary)] hover:border-rose-500/40'
+                  }`}
+                >
+                  <X className="w-5 h-5 text-rose-400" />
+                  <span>Decline / Reject</span>
+                </button>
+              </div>
+            </div>
+
+            {/* If Approve: Points Award & Signer */}
+            {reviewAction === 'approve' && (
+              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                    <Trophy className="w-4 h-4" /> Award Department Performance Points
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {[10, 25, 50, 100].map(pts => (
+                      <button
+                        key={pts}
+                        type="button"
+                        onClick={() => setAdminPointsAwarded(pts)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all ${
+                          adminPointsAwarded === pts
+                            ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        }`}
+                      >
+                        +{pts}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-emerald-500/20">
+                  <div>
+                    <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase">Custom Points Award</label>
+                    <input
+                      type="number"
+                      value={adminPointsAwarded}
+                      onChange={(e) => setAdminPointsAwarded(Number(e.target.value) || 0)}
+                      className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-900 border border-emerald-500/30 text-emerald-400 font-bold text-xs"
+                      min={0}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase">Verification Seal / Signer</label>
+                    <input
+                      type="text"
+                      value={adminDswVerifiedBy}
+                      onChange={(e) => setAdminDswVerifiedBy(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-900 border border-emerald-500/30 text-[var(--text-primary)] text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Review Remarks Textarea */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center justify-between">
+                <span>Official Feedback & Review Remarks</span>
+                {reviewAction === 'needs_revision' && <span className="text-rose-400 font-normal lowercase">(required for revision)</span>}
+              </label>
+              <textarea
+                value={adminReviewRemarks}
+                onChange={(e) => setAdminReviewRemarks(e.target.value)}
+                placeholder={
+                  reviewAction === 'approve'
+                    ? 'e.g., Excellent documentation and high attendee engagement. Verified with UN SDG compliance.'
+                    : reviewAction === 'needs_revision'
+                    ? 'e.g., Please upload the verified expenditure receipts in Page 3 and re-submit for approval.'
+                    : 'e.g., Report did not meet institutional format guidelines.'
+                }
+                rows={3}
+                className="w-full p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-[var(--panel-border)] text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--panel-border)]">
+              <button
+                type="button"
+                onClick={() => setShowReviewModal(false)}
+                className="px-5 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-[var(--text-secondary)] transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteAdminReview}
+                disabled={submittingReview}
+                className={`px-6 py-2.5 rounded-2xl text-xs font-black text-white shadow-lg flex items-center gap-2 active:scale-95 transition-all ${
+                  reviewAction === 'approve'
+                    ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/25'
+                    : reviewAction === 'needs_revision'
+                    ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/25'
+                    : 'bg-rose-600 hover:bg-rose-500 shadow-rose-600/25'
+                }`}
+              >
+                {submittingReview ? (
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+                <span>
+                  {reviewAction === 'approve' ? 'Confirm Approval & Award Points' : reviewAction === 'needs_revision' ? 'Send Revision Request' : 'Decline Report'}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       )}

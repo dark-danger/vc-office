@@ -1,25 +1,31 @@
 import os
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_
 from app.database import get_db
 from app.core.deps import get_current_user, require_role
 from app.core.logo_base64 import GEETA_LOGO_BASE64
-from app.models.all_models import EventReport, Event, User, UserRole
-from app.schemas.schemas import EventReportCreate, EventReportUpdate, EventReportOut
+from app.models.all_models import EventReport, Event, User, UserRole, Department, utc_now
+from app.schemas.schemas import EventReportCreate, EventReportUpdate, EventReportOut, EventReportReviewPayload
+from app.services.notification_service import create_notification, log_audit
 from jinja2 import Template
 
 router = APIRouter(prefix="/api/event-reports", tags=["Official Event Reports"])
 
 
-def build_report_out(report: EventReport, event_title: Optional[str] = None, creator_name: Optional[str] = None) -> EventReportOut:
+def build_report_out(report: EventReport, event_title: Optional[str] = None, creator_user: Optional[User] = None) -> EventReportOut:
+    creator = creator_user or report.creator
     return EventReportOut(
         id=report.id,
         event_id=report.event_id,
         event_title=event_title or (report.event.title if report.event else None),
         status=report.status,
+        report_type=report.report_type or "event_report",
+        department_id=report.department_id,
+        department_name=report.department_name or (report.department.name if report.department else (creator.department if creator else None)),
         category=report.category,
         sub_category=report.sub_category,
         sdg_mapping=report.sdg_mapping,
@@ -69,8 +75,17 @@ def build_report_out(report: EventReport, event_title: Optional[str] = None, cre
         coordinator_signature=report.coordinator_signature,
         head_of_school_signature=report.head_of_school_signature,
         dsw_verified_by=report.dsw_verified_by,
+        submitted_at=report.submitted_at,
+        reviewed_by=report.reviewed_by,
+        reviewer_name=report.reviewer_name,
+        reviewed_at=report.reviewed_at,
+        review_status=report.review_status or report.status,
+        review_remarks=report.review_remarks,
+        points_awarded=report.points_awarded or 0,
         created_by=report.created_by,
-        creator_name=creator_name or (report.creator.name if report.creator else None),
+        creator_name=creator.name if creator else None,
+        creator_email=creator.email if creator else None,
+        creator_employee_id=creator.employee_id if creator else None,
         created_at=report.created_at,
         updated_at=report.updated_at
     )
@@ -80,6 +95,9 @@ def build_report_out(report: EventReport, event_title: Optional[str] = None, cre
 async def get_event_reports(
     event_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
+    review_status: Optional[str] = Query(None),
+    department_id: Optional[int] = Query(None),
+    report_type: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -88,8 +106,14 @@ async def get_event_reports(
     
     if event_id:
         query = query.where(EventReport.event_id == event_id)
-    if status:
+    if status and status != 'all':
         query = query.where(EventReport.status == status)
+    if review_status and review_status != 'all':
+        query = query.where(EventReport.review_status == review_status)
+    if department_id:
+        query = query.where(EventReport.department_id == department_id)
+    if report_type and report_type != 'all':
+        query = query.where(EventReport.report_type == report_type)
 
     result = await db.execute(query)
     reports = result.scalars().all()
@@ -99,7 +123,13 @@ async def get_event_reports(
     for r in reports:
         if search:
             query_str = search.lower()
-            if query_str not in (r.event_name or "").lower() and query_str not in (r.coordinator_name or "").lower():
+            match = (
+                query_str in (r.event_name or "").lower() or
+                query_str in (r.coordinator_name or "").lower() or
+                query_str in (r.department_name or "").lower() or
+                query_str in (r.organized_by or "").lower()
+            )
+            if not match:
                 continue
         out.append(build_report_out(r))
     return out
@@ -118,14 +148,27 @@ async def create_event_report(
         if not event:
             raise HTTPException(status_code=404, detail="Associated event not found")
 
+    is_submitted = (payload.status == "submitted")
+    dept_id = payload.department_id or current_user.department_id
+    dept_name = payload.department_name or current_user.department
+
+    if dept_id and not dept_name:
+        d_res = await db.execute(select(Department).where(Department.id == dept_id))
+        d_obj = d_res.scalar_one_or_none()
+        if d_obj:
+            dept_name = d_obj.name
+
     report = EventReport(
         event_id=payload.event_id,
         status=payload.status or "draft",
+        report_type=payload.report_type or "event_report",
+        department_id=dept_id,
+        department_name=dept_name,
         category=payload.category,
         sub_category=payload.sub_category,
         sdg_mapping=payload.sdg_mapping,
         event_name=payload.event_name,
-        organized_by=payload.organized_by,
+        organized_by=payload.organized_by or dept_name or "Geeta University",
         sponsorship_orgs=payload.sponsorship_orgs,
         coordinator_name=payload.coordinator_name or current_user.name,
         from_date=payload.from_date,
@@ -171,9 +214,11 @@ async def create_event_report(
         press_release_doc=payload.press_release_doc,
         feedback_guest=payload.feedback_guest,
         feedback_participants=payload.feedback_participants,
-        coordinator_signature=payload.coordinator_signature,
+        coordinator_signature=payload.coordinator_signature or current_user.name,
         head_of_school_signature=payload.head_of_school_signature,
         dsw_verified_by=payload.dsw_verified_by,
+        submitted_at=utc_now() if is_submitted else None,
+        review_status="pending_review" if is_submitted else "draft",
         created_by=current_user.id
     )
 
@@ -181,7 +226,26 @@ async def create_event_report(
     await db.commit()
     await db.refresh(report)
 
-    return build_report_out(report, creator_name=current_user.name)
+    # Notify Super Admins if submitted
+    if is_submitted:
+        try:
+            sa_res = await db.execute(select(User).where(User.role == UserRole.super_admin))
+            super_admins = sa_res.scalars().all()
+            for sa in super_admins:
+                await create_notification(
+                    db=db,
+                    user_id=sa.id,
+                    title="New Official Report Submitted 📄",
+                    body=f"{current_user.name} ({dept_name or 'HOD'}) submitted '{report.event_name}' for official review.",
+                    type="report_submitted",
+                    link=f"/admin/events/reports/{report.id}"
+                )
+            await log_audit(db, action="SUBMIT_OFFICIAL_REPORT", entity_type="event_report", actor_id=current_user.id, entity_id=report.id, meta={"event_name": report.event_name})
+            await db.commit()
+        except Exception as e:
+            print(f"[ERROR] Notification on report submit failed: {e}")
+
+    return build_report_out(report, creator_user=current_user)
 
 
 @router.get("/{report_id}", response_model=EventReportOut)
@@ -209,7 +273,18 @@ async def update_event_report(
     if not report:
         raise HTTPException(status_code=404, detail="Event report not found")
 
+    # Author or Super Admin can edit
+    if current_user.role != UserRole.super_admin and report.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to edit this report")
+
+    was_draft_or_revision = report.status in ["draft", "needs_revision"]
     update_data = payload.dict(exclude_unset=True)
+
+    # If transitioning to submitted status
+    if update_data.get("status") == "submitted" and was_draft_or_revision:
+        report.submitted_at = utc_now()
+        report.review_status = "pending_review"
+
     for key, value in update_data.items():
         setattr(report, key, value)
 
@@ -220,6 +295,114 @@ async def update_event_report(
             (report.participants_gu_faculty or 0) +
             (report.participants_external or 0)
         )
+
+    await db.commit()
+    await db.refresh(report)
+
+    # If just submitted, notify Super Admins
+    if update_data.get("status") == "submitted" and was_draft_or_revision:
+        try:
+            sa_res = await db.execute(select(User).where(User.role == UserRole.super_admin))
+            super_admins = sa_res.scalars().all()
+            for sa in super_admins:
+                await create_notification(
+                    db=db,
+                    user_id=sa.id,
+                    title="Official Report Submissions Update 📄",
+                    body=f"{current_user.name} submitted '{report.event_name}' for official review.",
+                    type="report_submitted",
+                    link=f"/admin/events/reports/{report.id}"
+                )
+            await log_audit(db, action="SUBMIT_OFFICIAL_REPORT", entity_type="event_report", actor_id=current_user.id, entity_id=report.id, meta={"event_name": report.event_name})
+            await db.commit()
+        except Exception as e:
+            print(f"[ERROR] Notification on report submit failed: {e}")
+
+    return build_report_out(report)
+
+
+@router.post("/{report_id}/review", response_model=EventReportOut)
+async def review_event_report(
+    report_id: int,
+    payload: EventReportReviewPayload,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    VC Office / DSW Official Review Endpoint:
+    Allows Super Admins to approve, request revisions, or reject submitted reports,
+    award department leaderboard points, and provide official feedback remarks.
+    """
+    if current_user.role != UserRole.super_admin:
+        raise HTTPException(status_code=403, detail="Only VC Office Administrators can review official reports.")
+
+    result = await db.execute(select(EventReport).where(EventReport.id == report_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Event report not found")
+
+    action = payload.action.lower().strip()
+    report.reviewed_by = current_user.id
+    report.reviewer_name = current_user.name
+    report.reviewed_at = utc_now()
+    report.review_remarks = payload.review_remarks
+
+    if action == "approve":
+        report.status = "approved"
+        report.review_status = "approved"
+        report.dsw_verified_by = payload.dsw_verified_by or f"VC Office Verified ({current_user.name})"
+        
+        pts = int(payload.points_awarded or 0)
+        report.points_awarded = pts
+
+        # If points awarded and department exists, credit department points
+        if pts > 0 and report.department_id:
+            dept_res = await db.execute(select(Department).where(Department.id == report.department_id))
+            dept = dept_res.scalar_one_or_none()
+            if dept:
+                dept.points = (dept.points or 0) + pts
+
+        # Send notification to author
+        await create_notification(
+            db=db,
+            user_id=report.created_by,
+            title="Official Report Approved! 🏆",
+            body=f"Your submission '{report.event_name}' has been approved by VC Office" + (f" and +{pts} points were awarded to your department!" if pts > 0 else "!"),
+            type="report_approved",
+            link=f"/head/events/reports/{report.id}"
+        )
+        await log_audit(db, action="APPROVE_OFFICIAL_REPORT", entity_type="event_report", actor_id=current_user.id, entity_id=report.id, meta={"points": pts, "remarks": payload.review_remarks})
+
+    elif action == "needs_revision":
+        report.status = "needs_revision"
+        report.review_status = "needs_revision"
+
+        await create_notification(
+            db=db,
+            user_id=report.created_by,
+            title="Report Revision Requested ⚠️",
+            body=f"VC Office requested changes for '{report.event_name}'. Remarks: {payload.review_remarks or 'Please check details and re-submit.'}",
+            type="report_needs_revision",
+            link=f"/head/events/reports/{report.id}"
+        )
+        await log_audit(db, action="REVISE_OFFICIAL_REPORT", entity_type="event_report", actor_id=current_user.id, entity_id=report.id, meta={"remarks": payload.review_remarks})
+
+    elif action == "reject":
+        report.status = "rejected"
+        report.review_status = "rejected"
+
+        await create_notification(
+            db=db,
+            user_id=report.created_by,
+            title="Report Submission Declined",
+            body=f"Your submission '{report.event_name}' was not approved. Remarks: {payload.review_remarks or 'Declined by VC Office.'}",
+            type="report_rejected",
+            link=f"/head/events/reports/{report.id}"
+        )
+        await log_audit(db, action="REJECT_OFFICIAL_REPORT", entity_type="event_report", actor_id=current_user.id, entity_id=report.id, meta={"remarks": payload.review_remarks})
+
+    else:
+        raise HTTPException(status_code=400, detail="Invalid review action. Allowed: approve, needs_revision, reject")
 
     await db.commit()
     await db.refresh(report)

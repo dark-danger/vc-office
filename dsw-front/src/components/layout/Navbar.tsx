@@ -21,6 +21,13 @@ export const Navbar: React.FC<NavbarProps> = ({ title, onToggleSidebar }) => {
         </span>
       );
     }
+    if (user?.role === 'department_head') {
+      return (
+        <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 shadow-xs whitespace-nowrap">
+          <Shield className="w-3 h-3" /> HOD / Dept Head
+        </span>
+      );
+    }
     if (user?.role === 'faculty') {
       return (
         <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center gap-1 shadow-xs whitespace-nowrap">

@@ -601,13 +601,29 @@ class EventReport(Base):
     head_of_school_signature: Mapped[str] = mapped_column(String(255), nullable=True)
     dsw_verified_by: Mapped[str] = mapped_column(String(255), nullable=True)
 
-    # Metadata
+    # Metadata & Affiliation
+    department_id: Mapped[Optional[int]] = mapped_column(ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
+    department_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    report_type: Mapped[str] = mapped_column(String(50), default="event_report") # event_report, department_report, activity_report
+
+    # Submission & Official Review Workflow
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewer_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_status: Mapped[Optional[str]] = mapped_column(String(50), default="draft") # draft, pending_review, approved, needs_revision, rejected
+    review_remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    points_awarded: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Standard Timestamps & Creator
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
     event = relationship("Event", back_populates="reports")
     creator = relationship("User", foreign_keys=[created_by])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+    department = relationship("Department", foreign_keys=[department_id])
 
 
 # 15. EMAIL CONNECTION MODEL (OAuth 2.0 Gmail Connection per User)
