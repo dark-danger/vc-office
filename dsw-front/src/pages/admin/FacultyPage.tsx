@@ -6,7 +6,7 @@ import {
   UserPlus, Search, Shield, Award, CheckCircle2, Clock, X, BarChart3,
   Trash2, Calendar, RotateCcw, Filter, CheckSquare, Sparkles, FileCheck,
   XCircle, ChevronDown, User as UserIcon, RefreshCw, ArrowRight, CornerDownRight,
-  Upload, FileSpreadsheet, Building2, Download
+  Upload, FileSpreadsheet, Building2, Download, Crown
 } from 'lucide-react';
 
 interface PeriodStats {
@@ -77,6 +77,7 @@ export const FacultyPage: React.FC = () => {
 
   // Directory State
   const [facultyList, setFacultyList] = useState<User[]>([]);
+  const [allDepartments, setAllDepartments] = useState<any[]>([]);
   const [searchDirectory, setSearchDirectory] = useState('');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
   const [loadingDirectory, setLoadingDirectory] = useState(true);
@@ -86,6 +87,9 @@ export const FacultyPage: React.FC = () => {
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [uploadingCsv, setUploadingCsv] = useState(false);
   const [csvResult, setCsvResult] = useState<any | null>(null);
+  const [selectedHodCandidates, setSelectedHodCandidates] = useState<{ [deptName: string]: string }>({});
+  const [appointingHodDept, setAppointingHodDept] = useState<string | null>(null);
+  const [hodSuccessMessage, setHodSuccessMessage] = useState<string | null>(null);
 
   // Tasks Filter State
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -129,6 +133,53 @@ export const FacultyPage: React.FC = () => {
     }
   };
 
+  // Fetch Departments List
+  const fetchDepartmentsList = async () => {
+    try {
+      const data = await apiRequest<any[]>('/departments');
+      setAllDepartments(data);
+    } catch (e) {
+      console.error('Failed to load departments', e);
+    }
+  };
+
+  // Appoint Faculty Member as HOD
+  const handleAppointAsHod = async (faculty: any, targetDeptName?: string) => {
+    const deptName = targetDeptName || faculty.department;
+    const targetDept = allDepartments.find(
+      d => d.id === faculty.department_id ||
+           d.name.toLowerCase() === (deptName || '').toLowerCase() ||
+           d.code.toLowerCase() === (deptName || '').toLowerCase()
+    );
+
+    if (!targetDept) {
+      alert(`Could not find department "${deptName}". Please make sure the department exists in the system.`);
+      return;
+    }
+
+    const confirmMsg = `Are you sure you want to appoint ${faculty.name} (${faculty.employee_id || faculty.email}) as Head of Department (HOD) for "${targetDept.name}"?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setAppointingHodDept(targetDept.name);
+    try {
+      await apiRequest(`/departments/${targetDept.id}/head`, 'PUT', {
+        head_id: faculty.id,
+        email: faculty.email,
+        employee_id: faculty.employee_id,
+        name: faculty.name,
+        phone: faculty.phone
+      });
+      setHodSuccessMessage(`🎉 ${faculty.name} has been appointed as Head of ${targetDept.name}!`);
+      setTimeout(() => setHodSuccessMessage(null), 4000);
+      await fetchFaculty();
+      await fetchDepartmentsList();
+    } catch (err: any) {
+      alert(`Failed to appoint HOD: ${err.message}`);
+    } finally {
+      setAppointingHodDept(null);
+    }
+  };
+
   // Bulk CSV Upload Handlers
   const handleCsvUpload = async () => {
     if (!csvFile) return;
@@ -140,6 +191,7 @@ export const FacultyPage: React.FC = () => {
       const res = await apiRequest('/departments/upload-csv', 'POST', formData, true);
       setCsvResult(res);
       await fetchFaculty();
+      await fetchDepartmentsList();
     } catch (err: any) {
       alert(`CSV Upload Failed: ${err.message}`);
     } finally {
@@ -148,7 +200,7 @@ export const FacultyPage: React.FC = () => {
   };
 
   const downloadSampleCsv = () => {
-    const csvContent = 'name,employee_id,department,designation,phone,email\nDr. Amit Sharma,GU3001,Computer Science & Engineering,Associate Professor,+91 9876543210,amit.sharma@geeta.edu.in\nDr. Priya Verma,GU3002,Mechanical Engineering,Assistant Professor,+91 9812345678,priya.verma@geeta.edu.in\nDr. Rahul Gupta,GU3003,School of Business & Management,Professor,+91 9823456789,rahul.gupta@geeta.edu.in\n';
+    const csvContent = 'name,employee_id,department,designation,phone,email,is_hod\nDr. Amit Sharma,GU3001,Computer Science & Engineering,Associate Professor,+91 9876543210,amit.sharma@geeta.edu.in,yes\nDr. Priya Verma,GU3002,Mechanical Engineering,Assistant Professor,+91 9812345678,priya.verma@geeta.edu.in,no\nDr. Rahul Gupta,GU3003,School of Business & Management,Professor,+91 9823456789,rahul.gupta@geeta.edu.in,yes\n';
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -216,6 +268,7 @@ export const FacultyPage: React.FC = () => {
 
   useEffect(() => {
     fetchFaculty();
+    fetchDepartmentsList();
   }, [searchDirectory]);
 
   useEffect(() => {
@@ -322,6 +375,19 @@ export const FacultyPage: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Success Notification */}
+      {hodSuccessMessage && (
+        <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center justify-between shadow-lg animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{hodSuccessMessage}</span>
+          </div>
+          <button onClick={() => setHodSuccessMessage(null)} className="text-emerald-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header & Main Tabs */}
       <div className="glass-panel p-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-br from-emerald-500/10 via-blue-500/10 to-transparent rounded-full blur-3xl -z-10 pointer-events-none" />
@@ -336,7 +402,7 @@ export const FacultyPage: React.FC = () => {
               Faculty Roster & Bulk CSV Import
             </h1>
             <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1 max-w-2xl leading-relaxed">
-              Maintain university-wide faculty records across all departments. Import 500+ faculty members via master CSV, manage credentials, and monitor duty analytics.
+              Maintain university-wide faculty records across all departments. Import faculty rosters via master CSV, appoint Department Heads (HOD), and monitor duty analytics.
             </p>
           </div>
 
@@ -350,7 +416,7 @@ export const FacultyPage: React.FC = () => {
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-all shadow-sm active:scale-95"
             >
               <Upload className="w-4 h-4" />
-              <span>Bulk CSV Upload</span>
+              <span>Bulk CSV Upload & Assign HOD</span>
             </button>
 
             <button
@@ -462,63 +528,99 @@ export const FacultyPage: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredFaculty.map((f) => (
-                      <tr key={f.id} className="hover:bg-emerald-500/5 transition-colors">
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-md">
-                              {f.name.charAt(0)}
+                    filteredFaculty.map((f) => {
+                      const isHod = f.role === 'department_head' || allDepartments.some(d => d.head_id === f.id || (d.name === f.department && d.head_id === f.id));
+                      return (
+                        <tr key={f.id} className="hover:bg-emerald-500/5 transition-colors">
+                          <td className="p-4">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-9 h-9 rounded-xl text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-md ${
+                                isHod
+                                  ? 'bg-gradient-to-tr from-amber-600 to-amber-500 ring-2 ring-amber-400/40'
+                                  : 'bg-gradient-to-tr from-emerald-600 to-teal-500'
+                              }`}>
+                                {isHod ? '👑' : f.name.charAt(0)}
+                              </div>
+                              <div>
+                                <div className="font-bold text-xs sm:text-sm text-[var(--text-primary)] flex items-center gap-1.5">
+                                  <span>{f.name}</span>
+                                  {isHod && (
+                                    <span className="px-2 py-0.2 rounded-full text-[9px] font-extrabold bg-amber-500/20 text-amber-500 border border-amber-500/30 flex items-center gap-0.5">
+                                      <Crown className="w-2.5 h-2.5" /> HOD
+                                    </span>
+                                  )}
+                                </div>
+                                <div className={`text-[10px] font-semibold uppercase ${
+                                  isHod ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'
+                                }`}>
+                                  {isHod ? 'Head of Department' : 'Faculty Staff'}
+                                </div>
+                              </div>
                             </div>
-                            <div>
-                              <div className="font-bold text-xs sm:text-sm text-[var(--text-primary)]">{f.name}</div>
-                              <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase">Faculty Staff</div>
+                          </td>
+                          <td className="p-4">
+                            <div className="text-[var(--text-primary)] font-medium text-xs">{f.department || 'General'}</div>
+                            <div className="text-[11px] text-[var(--text-muted)]">{f.designation || 'Faculty'}</div>
+                          </td>
+                          <td className="p-4 font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                            {f.employee_id || 'N/A'}
+                          </td>
+                          <td className="p-4 text-xs">
+                            <div className="text-[var(--text-primary)] font-medium">{f.email}</div>
+                            <div className="text-[11px] text-[var(--text-muted)]">{f.phone || 'No phone recorded'}</div>
+                          </td>
+                          <td className="p-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              {/* Appoint as HOD Action */}
+                              {!isHod ? (
+                                <button
+                                  onClick={() => handleAppointAsHod(f)}
+                                  disabled={appointingHodDept === f.department}
+                                  className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-bold transition-all flex items-center gap-1 shadow-xs active:scale-95"
+                                  title="Appoint this faculty member as Head of Department"
+                                >
+                                  <Crown className="w-3.5 h-3.5 text-amber-500" />
+                                  <span>Set as HOD</span>
+                                </button>
+                              ) : (
+                                <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-extrabold flex items-center gap-1">
+                                  <Crown className="w-3 h-3 text-amber-500" />
+                                  <span>Active Head</span>
+                                </span>
+                              )}
+
+                              {/* Filter Tasks for this Faculty */}
+                              <button
+                                onClick={() => handleFilterTasksForFaculty(f.id)}
+                                className="px-2.5 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-xs font-bold transition-all flex items-center gap-1"
+                                title="Filter tasks assigned to this faculty"
+                              >
+                                <CheckSquare className="w-3.5 h-3.5" />
+                                <span>Tasks</span>
+                              </button>
+
+                              {/* View Duty Analytics */}
+                              <button
+                                onClick={() => handleViewStats(f.id)}
+                                className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 transition-colors"
+                                title="View Duty Analytics"
+                              >
+                                <BarChart3 className="w-4 h-4" />
+                              </button>
+
+                              {/* Delete Faculty */}
+                              <button
+                                onClick={() => handleDeleteFaculty(f.id)}
+                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 transition-colors"
+                                title="Delete Faculty Member"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <div className="text-[var(--text-primary)] font-medium text-xs">{f.department || 'General'}</div>
-                          <div className="text-[11px] text-[var(--text-muted)]">{f.designation || 'Faculty'}</div>
-                        </td>
-                        <td className="p-4 font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold">
-                          {f.employee_id || 'N/A'}
-                        </td>
-                        <td className="p-4 text-xs">
-                          <div className="text-[var(--text-primary)] font-medium">{f.email}</div>
-                          <div className="text-[11px] text-[var(--text-muted)]">{f.phone || 'No phone recorded'}</div>
-                        </td>
-                        <td className="p-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* Filter Tasks for this Faculty */}
-                            <button
-                              onClick={() => handleFilterTasksForFaculty(f.id)}
-                              className="px-2.5 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-xs font-bold transition-all flex items-center gap-1"
-                              title="Filter tasks assigned to this faculty"
-                            >
-                              <CheckSquare className="w-3.5 h-3.5" />
-                              <span>View Tasks</span>
-                            </button>
-
-                            {/* View Duty Analytics */}
-                            <button
-                              onClick={() => handleViewStats(f.id)}
-                              className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 transition-colors"
-                              title="View Duty Analytics"
-                            >
-                              <BarChart3 className="w-4 h-4" />
-                            </button>
-
-                            {/* Delete Faculty */}
-                            <button
-                              onClick={() => handleDeleteFaculty(f.id)}
-                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 transition-colors"
-                              title="Delete Faculty Member"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -1089,45 +1191,141 @@ export const FacultyPage: React.FC = () => {
             </div>
 
             {/* Results Table */}
-            {csvResult && (
-              <div className="mt-6 pt-5 border-t border-[var(--panel-border)] space-y-4 animate-in fade-in duration-150">
-                <div className="p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center justify-between">
-                  <span>Import Completed: {csvResult.created_count} New Faculty Created ({csvResult.skipped_count} Skipped / Updated)</span>
-                </div>
+            {csvResult && (() => {
+              const importedDeptsMap: { [deptName: string]: any[] } = {};
+              csvResult.created_accounts?.forEach((acc: any) => {
+                const dName = acc.department || 'General';
+                if (!importedDeptsMap[dName]) importedDeptsMap[dName] = [];
+                importedDeptsMap[dName].push(acc);
+              });
+              const deptEntries = Object.entries(importedDeptsMap);
 
-                {csvResult.created_accounts && csvResult.created_accounts.length > 0 && (
-                  <div>
-                    <h4 className="text-xs font-extrabold text-[var(--text-primary)] mb-2">
-                      Generated Faculty Credentials ({csvResult.created_accounts.length})
-                    </h4>
-                    <div className="max-h-60 overflow-y-auto rounded-xl border border-[var(--panel-border)] bg-black/30">
-                      <table className="w-full text-left text-[11px]">
-                        <thead>
-                          <tr className="border-b border-[var(--panel-border)] text-[var(--text-muted)] uppercase text-[9px] font-bold">
-                            <th className="py-2 px-3">Name</th>
-                            <th className="py-2 px-3">Employee ID</th>
-                            <th className="py-2 px-3">Department</th>
-                            <th className="py-2 px-3">Generated Email</th>
-                            <th className="py-2 px-3">Password</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--panel-border)]/50">
-                          {csvResult.created_accounts.map((cred: any, i: number) => (
-                            <tr key={i} className="hover:bg-white/5">
-                              <td className="py-2 px-3 font-semibold text-[var(--text-primary)]">{cred.name}</td>
-                              <td className="py-2 px-3 font-mono text-emerald-500 font-bold">{cred.employee_id}</td>
-                              <td className="py-2 px-3 text-[var(--text-secondary)]">{cred.department}</td>
-                              <td className="py-2 px-3 font-mono text-[var(--text-secondary)]">{cred.email}</td>
-                              <td className="py-2 px-3 font-mono text-amber-500 font-bold">{cred.initial_password}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+              return (
+                <div className="mt-6 pt-5 border-t border-[var(--panel-border)] space-y-5 animate-in fade-in duration-150">
+                  <div className="p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center justify-between">
+                    <span>✅ Import Completed: {csvResult.created_count} New Faculty Accounts ({csvResult.skipped_count} Existing Updated)</span>
                   </div>
-                )}
-              </div>
-            )}
+
+                  {/* Interactive HOD Appointment Section for Each Imported Department */}
+                  {deptEntries.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Crown className="w-4 h-4 text-amber-500" />
+                        <h4 className="text-xs font-extrabold text-[var(--text-primary)] uppercase tracking-wider">
+                          Appoint Department Heads from Uploaded Roster ({deptEntries.length} Departments)
+                        </h4>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        {deptEntries.map(([dName, facs]) => {
+                          const matchedDept = allDepartments.find(
+                            d => d.name.toLowerCase() === dName.toLowerCase() ||
+                                 d.code.toLowerCase() === dName.toLowerCase() ||
+                                 dName.toLowerCase().includes(d.name.toLowerCase())
+                          );
+                          const currentHeadName = matchedDept?.head_name;
+                          const selectedCandId = selectedHodCandidates[dName] || String(facs[0]?.id || '');
+                          const selectedCand = facs.find(f => String(f.id) === selectedCandId) || facs[0];
+
+                          return (
+                            <div key={dName} className="p-3.5 rounded-xl bg-black/30 border border-[var(--panel-border)] space-y-2.5">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                  <div className="font-extrabold text-xs text-[var(--text-primary)] flex items-center gap-2">
+                                    <Building2 className="w-3.5 h-3.5 text-emerald-500" />
+                                    <span>{dName}</span>
+                                  </div>
+                                  <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                                    Current Head: {currentHeadName ? <strong className="text-emerald-500">{currentHeadName}</strong> : <span className="text-amber-500 font-semibold">Vacant</span>} • {facs.length} faculties in this batch
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                                  <select
+                                    value={selectedCandId}
+                                    onChange={(e) => setSelectedHodCandidates(prev => ({ ...prev, [dName]: e.target.value }))}
+                                    className="glass-input text-xs py-1.5 px-2.5 max-w-[220px]"
+                                  >
+                                    {facs.map(f => (
+                                      <option key={f.id} value={String(f.id)}>
+                                        {f.name} ({f.employee_id})
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAppointAsHod(selectedCand, dName)}
+                                    disabled={appointingHodDept === dName || !selectedCand}
+                                    className="btn-primary text-xs py-1.5 px-3 font-bold flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 shrink-0 shadow-sm"
+                                  >
+                                    <Crown className="w-3.5 h-3.5" />
+                                    <span>{appointingHodDept === dName ? 'Appointing...' : 'Appoint as HOD'}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Generated Faculty Credentials Table */}
+                  {csvResult.created_accounts && csvResult.created_accounts.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-extrabold text-[var(--text-primary)] mb-2 flex items-center justify-between">
+                        <span>Generated Faculty Credentials ({csvResult.created_accounts.length})</span>
+                        <span className="text-[10px] text-[var(--text-muted)] font-normal">Passwords auto-set to Employee ID</span>
+                      </h4>
+                      <div className="max-h-60 overflow-y-auto rounded-xl border border-[var(--panel-border)] bg-black/30">
+                        <table className="w-full text-left text-[11px]">
+                          <thead>
+                            <tr className="border-b border-[var(--panel-border)] text-[var(--text-muted)] uppercase text-[9px] font-bold">
+                              <th className="py-2 px-3">Name</th>
+                              <th className="py-2 px-3">Employee ID</th>
+                              <th className="py-2 px-3">Department</th>
+                              <th className="py-2 px-3">Email</th>
+                              <th className="py-2 px-3">Password</th>
+                              <th className="py-2 px-3 text-right">HOD Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[var(--panel-border)]/50">
+                            {csvResult.created_accounts.map((cred: any, i: number) => {
+                              const isCurrentHead = cred.is_hod || allDepartments.some(d => d.head_id === cred.id || (d.name === cred.department && d.head_id === cred.id));
+                              return (
+                                <tr key={i} className="hover:bg-white/5">
+                                  <td className="py-2 px-3 font-semibold text-[var(--text-primary)]">{cred.name}</td>
+                                  <td className="py-2 px-3 font-mono text-emerald-500 font-bold">{cred.employee_id}</td>
+                                  <td className="py-2 px-3 text-[var(--text-secondary)]">{cred.department}</td>
+                                  <td className="py-2 px-3 font-mono text-[var(--text-secondary)]">{cred.email}</td>
+                                  <td className="py-2 px-3 font-mono text-amber-500 font-bold">{cred.initial_password}</td>
+                                  <td className="py-2 px-3 text-right">
+                                    {isCurrentHead ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                        <Crown className="w-2.5 h-2.5" /> HOD
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleAppointAsHod(cred, cred.department)}
+                                        className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:text-white bg-amber-500/10 hover:bg-amber-500 px-2 py-0.5 rounded border border-amber-500/30 transition-all"
+                                      >
+                                        <Crown className="w-2.5 h-2.5" /> Set HOD
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

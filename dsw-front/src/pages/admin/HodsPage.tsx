@@ -3,7 +3,7 @@ import { apiRequest } from '../../lib/api';
 import {
   ShieldCheck, UserPlus, Search, RefreshCw, Mail, Phone,
   Building2, Trophy, Award, CheckCircle2, X, Sparkles, Filter,
-  CheckSquare, ArrowRight, UserCheck, AlertCircle
+  CheckSquare, ArrowRight, UserCheck, AlertCircle, Crown
 } from 'lucide-react';
 
 interface DepartmentItem {
@@ -31,8 +31,12 @@ export const HodsPage: React.FC = () => {
 
   // Assign / Edit HOD Modal state
   const [selectedDept, setSelectedDept] = useState<DepartmentItem | null>(null);
+  const [deptFacultyList, setDeptFacultyList] = useState<any[]>([]);
+  const [loadingDeptFaculty, setLoadingDeptFaculty] = useState(false);
+  const [selectedFacultyId, setSelectedFacultyId] = useState<string>('');
   const [showHodModal, setShowHodModal] = useState(false);
   const [hodForm, setHodForm] = useState({
+    head_id: undefined as number | undefined,
     name: '',
     email: '',
     phone: '',
@@ -58,9 +62,11 @@ export const HodsPage: React.FC = () => {
     }
   };
 
-  const handleOpenHodModal = (dept: DepartmentItem) => {
+  const handleOpenHodModal = async (dept: DepartmentItem) => {
     setSelectedDept(dept);
+    setSelectedFacultyId(dept.head_id ? String(dept.head_id) : '');
     setHodForm({
+      head_id: dept.head_id || undefined,
       name: dept.head_name || '',
       email: dept.head_email || '',
       phone: '',
@@ -69,6 +75,34 @@ export const HodsPage: React.FC = () => {
     });
     setAssignSuccess(null);
     setShowHodModal(true);
+
+    // Fetch faculty members belonging to this department
+    setLoadingDeptFaculty(true);
+    try {
+      const facs = await apiRequest<any[]>(`/departments/${dept.id}/faculty`);
+      setDeptFacultyList(facs || []);
+    } catch (e) {
+      console.error('Failed to load department faculty list', e);
+      setDeptFacultyList([]);
+    } finally {
+      setLoadingDeptFaculty(false);
+    }
+  };
+
+  const handleSelectFacultyCandidate = (facultyIdStr: string) => {
+    setSelectedFacultyId(facultyIdStr);
+    if (!facultyIdStr) return;
+    const fac = deptFacultyList.find(f => String(f.id) === facultyIdStr);
+    if (fac) {
+      setHodForm({
+        head_id: fac.id,
+        name: fac.name || '',
+        email: fac.email || '',
+        phone: fac.phone || '',
+        employee_id: fac.employee_id || '',
+        password: '',
+      });
+    }
   };
 
   const handleAssignHod = async (e: React.FormEvent) => {
@@ -404,6 +438,31 @@ export const HodsPage: React.FC = () => {
               <div className="mb-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 {assignSuccess}
+              </div>
+            )}
+
+            {/* Quick Pick from Department Faculty Roster */}
+            {deptFacultyList.length > 0 && (
+              <div className="mb-4 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-2">
+                <label className="block text-[11px] font-extrabold text-emerald-700 dark:text-emerald-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Crown className="w-3.5 h-3.5 text-amber-500" />
+                    Appoint from Department Faculty Roster:
+                  </span>
+                  <span className="text-[10px] text-[var(--text-muted)] font-normal">{deptFacultyList.length} faculty available</span>
+                </label>
+                <select
+                  value={selectedFacultyId}
+                  onChange={(e) => handleSelectFacultyCandidate(e.target.value)}
+                  className="glass-input text-xs w-full py-2 px-2.5 bg-black/40 font-medium border-emerald-500/40"
+                >
+                  <option value="">-- Choose faculty member to auto-fill & appoint --</option>
+                  {deptFacultyList.map((f: any) => (
+                    <option key={f.id} value={String(f.id)}>
+                      {f.name} ({f.employee_id || f.email}) - {f.designation || 'Faculty'}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 

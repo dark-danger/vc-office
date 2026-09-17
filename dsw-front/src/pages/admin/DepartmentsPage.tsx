@@ -3,7 +3,7 @@ import { apiRequest } from '../../lib/api';
 import {
   Building2, Users, UserPlus, Upload, ShieldCheck, CheckCircle2,
   FileSpreadsheet, Award, Search, Plus, RefreshCw, X, ArrowRight,
-  TrendingUp, CheckSquare, Sparkles
+  TrendingUp, CheckSquare, Sparkles, Crown
 } from 'lucide-react';
 
 interface DepartmentItem {
@@ -31,8 +31,12 @@ export const DepartmentsPage: React.FC = () => {
 
   // Assign HOD Modal state
   const [selectedDept, setSelectedDept] = useState<DepartmentItem | null>(null);
+  const [deptFacultyList, setDeptFacultyList] = useState<any[]>([]);
+  const [loadingDeptFaculty, setLoadingDeptFaculty] = useState(false);
+  const [selectedFacultyId, setSelectedFacultyId] = useState<string>('');
   const [showHodModal, setShowHodModal] = useState(false);
   const [hodForm, setHodForm] = useState({
+    head_id: undefined as number | undefined,
     name: '',
     email: '',
     phone: '',
@@ -47,6 +51,7 @@ export const DepartmentsPage: React.FC = () => {
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [uploadingCsv, setUploadingCsv] = useState(false);
   const [csvResult, setCsvResult] = useState<any | null>(null);
+  const [appointingFromCsv, setAppointingFromCsv] = useState(false);
 
   useEffect(() => {
     fetchDepartments();
@@ -64,9 +69,11 @@ export const DepartmentsPage: React.FC = () => {
     }
   };
 
-  const handleOpenHodModal = (dept: DepartmentItem) => {
+  const handleOpenHodModal = async (dept: DepartmentItem) => {
     setSelectedDept(dept);
+    setSelectedFacultyId(dept.head_id ? String(dept.head_id) : '');
     setHodForm({
+      head_id: dept.head_id || undefined,
       name: dept.head_name || '',
       email: dept.head_email || '',
       phone: '',
@@ -75,6 +82,34 @@ export const DepartmentsPage: React.FC = () => {
     });
     setAssignSuccess(null);
     setShowHodModal(true);
+
+    // Fetch department faculty
+    setLoadingDeptFaculty(true);
+    try {
+      const facs = await apiRequest<any[]>(`/departments/${dept.id}/faculty`);
+      setDeptFacultyList(facs || []);
+    } catch (e) {
+      console.error('Failed to load department faculty list', e);
+      setDeptFacultyList([]);
+    } finally {
+      setLoadingDeptFaculty(false);
+    }
+  };
+
+  const handleSelectFacultyCandidate = (facultyIdStr: string) => {
+    setSelectedFacultyId(facultyIdStr);
+    if (!facultyIdStr) return;
+    const fac = deptFacultyList.find(f => String(f.id) === facultyIdStr);
+    if (fac) {
+      setHodForm({
+        head_id: fac.id,
+        name: fac.name || '',
+        email: fac.email || '',
+        phone: fac.phone || '',
+        employee_id: fac.employee_id || '',
+        password: '',
+      });
+    }
   };
 
   const handleAssignHod = async (e: React.FormEvent) => {
@@ -120,8 +155,28 @@ export const DepartmentsPage: React.FC = () => {
     }
   };
 
+  const handleAppointFromImport = async (cred: any) => {
+    if (!selectedDept) return;
+    if (!window.confirm(`Appoint ${cred.name} (${cred.employee_id}) as the Head of ${selectedDept.name}?`)) return;
+    setAppointingFromCsv(true);
+    try {
+      await apiRequest(`/departments/${selectedDept.id}/head`, 'PUT', {
+        head_id: cred.id,
+        email: cred.email,
+        employee_id: cred.employee_id,
+        name: cred.name
+      });
+      alert(`🎉 ${cred.name} is now appointed as Head of ${selectedDept.name}!`);
+      await fetchDepartments();
+    } catch (err: any) {
+      alert(`Failed to appoint HOD: ${err.message}`);
+    } finally {
+      setAppointingFromCsv(false);
+    }
+  };
+
   const downloadSampleCsv = () => {
-    const csvContent = 'name,employee_id,designation,phone,email\nDr. Amit Sharma,GU3001,Associate Professor,+91 9876543210,\nDr. Priya Verma,GU3002,Assistant Professor,+91 9812345678,\n';
+    const csvContent = 'name,employee_id,designation,phone,email,is_hod\nDr. Amit Sharma,GU3001,Associate Professor,+91 9876543210,amit.sharma@geeta.edu.in,yes\nDr. Priya Verma,GU3002,Assistant Professor,+91 9812345678,priya.verma@geeta.edu.in,no\n';
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -366,6 +421,31 @@ export const DepartmentsPage: React.FC = () => {
               </div>
             )}
 
+            {/* Quick Pick from Department Faculty Roster */}
+            {deptFacultyList.length > 0 && (
+              <div className="mb-4 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-2">
+                <label className="block text-[11px] font-extrabold text-emerald-700 dark:text-emerald-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Crown className="w-3.5 h-3.5 text-amber-500" />
+                    Select from Department Faculty Roster:
+                  </span>
+                  <span className="text-[10px] text-[var(--text-muted)] font-normal">{deptFacultyList.length} faculty available</span>
+                </label>
+                <select
+                  value={selectedFacultyId}
+                  onChange={(e) => handleSelectFacultyCandidate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-emerald-500/40 text-xs text-[var(--text-primary)] focus:outline-none"
+                >
+                  <option value="">-- Choose faculty member to auto-fill --</option>
+                  {deptFacultyList.map((f: any) => (
+                    <option key={f.id} value={String(f.id)}>
+                      {f.name} ({f.employee_id || f.email}) - {f.designation || 'Faculty'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <form onSubmit={handleAssignHod} className="space-y-4">
               <div>
                 <label className="block text-[11px] font-bold uppercase text-[var(--text-muted)] mb-1">
@@ -482,12 +562,12 @@ export const DepartmentsPage: React.FC = () => {
             {/* Instruction Callout */}
             <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 mb-5 space-y-2">
               <div className="font-bold text-xs text-emerald-300 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4" /> Automatic Credential Generation:
+                <Sparkles className="w-4 h-4" /> Automatic Credential Generation & HOD Selection:
               </div>
               <ul className="text-[11px] text-[var(--text-secondary)] list-disc list-inside space-y-1">
                 <li>If <b>email</b> is omitted in CSV, it will be auto-generated as: <code className="text-emerald-400 font-mono">&lt;employee_id&gt;@geeta.edu.in</code> (e.g., <code className="text-emerald-400 font-mono">gu3216@geeta.edu.in</code>).</li>
                 <li>Initial <b>password</b> will be set directly to their <code className="text-emerald-400 font-mono">&lt;employee_id&gt;</code> (e.g., <code className="text-emerald-400 font-mono">GU3216</code>).</li>
-                <li>Capable of provisioning hundreds of faculty records seamlessly in a single batch.</li>
+                <li>You can designate any imported faculty as <b>HOD</b> with one click directly from the list below.</li>
               </ul>
             </div>
 
@@ -542,13 +622,14 @@ export const DepartmentsPage: React.FC = () => {
             {csvResult && (
               <div className="mt-6 pt-5 border-t border-[var(--panel-border)] space-y-4">
                 <div className="p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center justify-between">
-                  <span>Import Completed: {csvResult.created_count} New Faculty Created ({csvResult.updated_count} Updated)</span>
+                  <span>Import Completed: {csvResult.created_count} New Faculty Created ({csvResult.skipped_count || 0} Skipped / Updated)</span>
                 </div>
 
-                {csvResult.credentials && csvResult.credentials.length > 0 && (
+                {((csvResult.created_accounts && csvResult.created_accounts.length > 0) || (csvResult.credentials && csvResult.credentials.length > 0)) && (
                   <div>
-                    <h4 className="text-xs font-extrabold text-[var(--text-primary)] mb-2">
-                      Generated Faculty Credentials ({csvResult.credentials.length})
+                    <h4 className="text-xs font-extrabold text-[var(--text-primary)] mb-2 flex items-center justify-between">
+                      <span>Imported Faculty Roster & HOD Designation</span>
+                      <span className="text-[10px] text-[var(--text-muted)]">Click "Set as HOD" to appoint leadership</span>
                     </h4>
                     <div className="max-h-60 overflow-y-auto rounded-xl border border-[var(--panel-border)] bg-black/30">
                       <table className="w-full text-left text-[11px]">
@@ -556,19 +637,39 @@ export const DepartmentsPage: React.FC = () => {
                           <tr className="border-b border-[var(--panel-border)] text-[var(--text-muted)] uppercase text-[9px] font-bold">
                             <th className="py-2 px-3">Name</th>
                             <th className="py-2 px-3">Employee ID</th>
-                            <th className="py-2 px-3">Generated Email</th>
-                            <th className="py-2 px-3">Generated Password</th>
+                            <th className="py-2 px-3">Email</th>
+                            <th className="py-2 px-3">Initial Password</th>
+                            <th className="py-2 px-3 text-right">Action</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[var(--panel-border)]/50">
-                          {csvResult.credentials.map((cred: any, i: number) => (
-                            <tr key={i} className="hover:bg-white/5">
-                              <td className="py-2 px-3 font-semibold text-[var(--text-primary)]">{cred.name}</td>
-                              <td className="py-2 px-3 font-mono text-emerald-400">{cred.employee_id}</td>
-                              <td className="py-2 px-3 font-mono text-[var(--text-secondary)]">{cred.email}</td>
-                              <td className="py-2 px-3 font-mono text-amber-400 font-bold">{cred.temp_password}</td>
-                            </tr>
-                          ))}
+                          {(csvResult.created_accounts || csvResult.credentials).map((cred: any, i: number) => {
+                            const isCurrentHead = cred.is_hod || selectedDept.head_id === cred.id;
+                            return (
+                              <tr key={i} className="hover:bg-white/5">
+                                <td className="py-2 px-3 font-semibold text-[var(--text-primary)]">{cred.name}</td>
+                                <td className="py-2 px-3 font-mono text-emerald-400 font-bold">{cred.employee_id}</td>
+                                <td className="py-2 px-3 font-mono text-[var(--text-secondary)]">{cred.email}</td>
+                                <td className="py-2 px-3 font-mono text-amber-400 font-bold">{cred.initial_password || cred.temp_password}</td>
+                                <td className="py-2 px-3 text-right">
+                                  {isCurrentHead ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/30">
+                                      <Crown className="w-2.5 h-2.5" /> Current HOD
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAppointFromImport(cred)}
+                                      disabled={appointingFromCsv}
+                                      className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 hover:text-white bg-amber-400/10 hover:bg-amber-500 px-2 py-0.5 rounded border border-amber-400/30 transition-all active:scale-95"
+                                    >
+                                      <Crown className="w-2.5 h-2.5" /> Set as HOD
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

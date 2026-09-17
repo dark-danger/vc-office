@@ -59,7 +59,12 @@ class DepartmentOut(BaseModel):
         from_attributes = True
 
 class DepartmentHeadAssign(BaseModel):
-    head_id: int
+    head_id: Optional[int] = None
+    email: Optional[str] = None
+    employee_id: Optional[str] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    password: Optional[str] = None
 
 class BulkFacultyRow(BaseModel):
     name: str
@@ -68,6 +73,7 @@ class BulkFacultyRow(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     department: Optional[str] = None
+    is_hod: Optional[bool] = False
 
 class BulkFacultyRequest(BaseModel):
     department_id: Optional[int] = None
@@ -80,6 +86,8 @@ class FacultyCredentialItem(BaseModel):
     employee_id: str
     designation: str
     department: str
+    department_id: Optional[int] = None
+    is_hod: bool = False
     initial_password: str
 
 class BulkFacultyResponse(BaseModel):

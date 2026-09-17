@@ -219,9 +219,46 @@ async def assign_department_head(
     if not dept:
         raise HTTPException(status_code=404, detail="Department not found")
 
-    target_user = await db.get(User, payload.head_id)
-    if not target_user:
-        raise HTTPException(status_code=404, detail="Selected faculty user not found")
+    target_user: Optional[User] = None
+
+    if payload.head_id:
+        target_user = await db.get(User, payload.head_id)
+        if not target_user:
+            raise HTTPException(status_code=404, detail="Selected faculty user not found")
+    elif payload.email or payload.employee_id:
+        query_conditions = []
+        if payload.email:
+            query_conditions.append(User.email == payload.email.strip().lower())
+        if payload.employee_id:
+            query_conditions.append(User.employee_id == payload.employee_id.strip().upper())
+        
+        target_res = await db.execute(select(User).filter(or_(*query_conditions)))
+        target_user = target_res.scalar_one_or_none()
+
+        if not target_user:
+            # Create new user for HOD
+            emp_id = (payload.employee_id or f"HOD{dept.code}").strip().upper()
+            email = (payload.email or f"{emp_id.lower()}@geeta.edu.in").strip().lower()
+            name = (payload.name or f"Head of {dept.name}").strip()
+            raw_pwd = payload.password or emp_id
+            
+            target_user = User(
+                name=name,
+                email=email,
+                phone=payload.phone,
+                employee_id=emp_id,
+                password_hash=get_password_hash(raw_pwd),
+                role=UserRole.department_head,
+                department_id=dept.id,
+                department=dept.name,
+                designation="Head of Department (HOD)",
+                is_active=True,
+                must_change_password=False
+            )
+            db.add(target_user)
+            await db.flush()
+    else:
+        raise HTTPException(status_code=400, detail="Must provide either head_id or user email/employee_id")
 
     # If department had a previous head, update previous head's role back to faculty if they don't head another dept
     if dept.head_id and dept.head_id != target_user.id:
@@ -234,6 +271,12 @@ async def assign_department_head(
     target_user.role = UserRole.department_head
     target_user.department_id = dept.id
     target_user.department = dept.name
+    if payload.name:
+        target_user.name = payload.name.strip()
+    if payload.phone:
+        target_user.phone = payload.phone.strip()
+    if payload.employee_id:
+        target_user.employee_id = payload.employee_id.strip().upper()
 
     await db.commit()
     await db.refresh(dept)
@@ -241,10 +284,13 @@ async def assign_department_head(
 
     return {
         "success": True,
-        "message": f"{target_user.name} has been assigned as Head of {dept.name}",
+        "message": f"{target_user.name} has been appointed as Head of {dept.name}",
         "department_id": dept.id,
+        "department_name": dept.name,
         "head_id": target_user.id,
-        "head_name": target_user.name
+        "head_name": target_user.name,
+        "head_email": target_user.email,
+        "head_employee_id": target_user.employee_id
     }
 
 
@@ -255,7 +301,7 @@ async def bulk_onboard_faculty_for_department(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Bulk create faculty accounts with auto-generated passwords matching Employee ID, with support for multi-department resolution."""
+    """Bulk create faculty accounts with auto-generated passwords matching Employee ID, with support for multi-department resolution and HOD assignment."""
     dept = await db.get(Department, id)
     if not dept:
         raise HTTPException(status_code=404, detail="Department not found")
@@ -299,6 +345,9 @@ async def bulk_onboard_faculty_for_department(
                         target_row_dept = d
                         break
 
+        # Check HOD designation flag
+        is_row_hod = bool(row.is_hod) or ("hod" in (row.designation or "").lower()) or ("head" in (row.designation or "").lower())
+
         # Determine email: provided or <emp_id>@geeta.edu.in
         email = (row.email or f"{emp_id.lower()}@geeta.edu.in").strip().lower()
         
@@ -312,6 +361,24 @@ async def bulk_onboard_faculty_for_department(
             if not existing_user.department_id:
                 existing_user.department_id = target_row_dept.id
                 existing_user.department = target_row_dept.name
+
+            if is_row_hod:
+                existing_user.role = UserRole.department_head
+                target_row_dept.head_id = existing_user.id
+
+            created_accounts.append(
+                FacultyCredentialItem(
+                    id=existing_user.id,
+                    name=existing_user.name,
+                    email=existing_user.email,
+                    employee_id=existing_user.employee_id or emp_id,
+                    designation=existing_user.designation or row.designation or "Faculty",
+                    department=target_row_dept.name,
+                    department_id=target_row_dept.id,
+                    is_hod=is_row_hod or (target_row_dept.head_id == existing_user.id),
+                    initial_password="[Existing Account]"
+                )
+            )
             skipped_count += 1
             continue
 
@@ -324,16 +391,19 @@ async def bulk_onboard_faculty_for_department(
             email=email,
             phone=row.phone,
             password_hash=hashed_pwd,
-            role=UserRole.faculty,
+            role=UserRole.department_head if is_row_hod else UserRole.faculty,
             department_id=target_row_dept.id,
             department=target_row_dept.name,
-            designation=row.designation or "Assistant Professor",
+            designation=row.designation or ("Head of Department" if is_row_hod else "Assistant Professor"),
             employee_id=emp_id,
             is_active=True,
             must_change_password=False
         )
         db.add(new_user)
         await db.flush()
+
+        if is_row_hod:
+            target_row_dept.head_id = new_user.id
 
         created_accounts.append(
             FacultyCredentialItem(
@@ -343,6 +413,8 @@ async def bulk_onboard_faculty_for_department(
                 employee_id=new_user.employee_id,
                 designation=new_user.designation or "Assistant Professor",
                 department=target_row_dept.name,
+                department_id=target_row_dept.id,
+                is_hod=is_row_hod,
                 initial_password=initial_pwd
             )
         )
@@ -366,7 +438,7 @@ async def upload_faculty_csv_file(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Upload a CSV file directly containing columns: Name, Employee_ID, Designation, Email, Phone."""
+    """Upload a CSV file directly containing columns: Name, Employee_ID, Designation, Email, Phone, Department, is_hod."""
     # Read file content
     contents = await file.read()
     try:
@@ -386,6 +458,9 @@ async def upload_faculty_csv_file(
         email = norm.get("email") or norm.get("mail") or None
         phone = norm.get("phone") or norm.get("mobile") or norm.get("contact") or None
         dept_val = norm.get("department") or norm.get("dept") or None
+        
+        is_hod_str = (norm.get("is_hod") or norm.get("hod") or norm.get("head") or norm.get("is_head") or "").lower()
+        is_hod = is_hod_str in ("true", "1", "yes", "y", "hod", "head") or "hod" in designation.lower() or "head" in designation.lower()
 
         if name and emp_id:
             faculty_rows.append(
@@ -395,7 +470,8 @@ async def upload_faculty_csv_file(
                     designation=designation,
                     email=email,
                     phone=phone,
-                    department=dept_val
+                    department=dept_val,
+                    is_hod=is_hod
                 )
             )
 
