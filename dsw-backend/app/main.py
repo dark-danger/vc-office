@@ -35,9 +35,9 @@ async def apply_safe_migrations(conn):
         "ALTER TABLE dynamic_forms ADD COLUMN IF NOT EXISTS payment_amount DOUBLE PRECISION DEFAULT 0.0;",
         "ALTER TABLE dynamic_forms ADD COLUMN IF NOT EXISTS upi_id VARCHAR(100);",
         "ALTER TABLE dynamic_forms ADD COLUMN IF NOT EXISTS upi_payee_name VARCHAR(200);",
-        # other table column verifications
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS event_type VARCHAR(50) DEFAULT 'Seminar';",
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS venue VARCHAR(200);",
+        "ALTER TABLE events ADD COLUMN IF NOT EXISTS core_committee JSON DEFAULT '[]'::json;",
         # Multi-file attachment and arbitrary length column alterations
         "ALTER TABLE task_submissions ALTER COLUMN file_url TYPE TEXT;",
         "ALTER TABLE task_submissions ALTER COLUMN file_name TYPE TEXT;",

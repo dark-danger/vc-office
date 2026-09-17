@@ -263,6 +263,15 @@ class TaskReviewPayload(BaseModel):
 
 
 # --- EVENT SCHEMAS ---
+class EventCommitteeMember(BaseModel):
+    role_name: str
+    faculty_id: int
+    faculty_name: Optional[str] = None
+    faculty_email: Optional[str] = None
+    faculty_department: Optional[str] = None
+    faculty_designation: Optional[str] = None
+    work_description: Optional[str] = None
+
 class EventCreate(BaseModel):
     title: str
     description: Optional[str] = None
@@ -272,6 +281,7 @@ class EventCreate(BaseModel):
     venue: Optional[str] = None
     coordinator_id: Optional[int] = None
     status: EventStatus = EventStatus.planned
+    core_committee: Optional[List[Dict[str, Any]]] = None
 
 class EventUpdate(BaseModel):
     title: Optional[str] = None
@@ -282,6 +292,7 @@ class EventUpdate(BaseModel):
     venue: Optional[str] = None
     coordinator_id: Optional[int] = None
     status: Optional[EventStatus] = None
+    core_committee: Optional[List[Dict[str, Any]]] = None
 
 class EventOut(BaseModel):
     id: int
@@ -296,6 +307,7 @@ class EventOut(BaseModel):
     status: EventStatus
     created_by: int
     created_at: datetime
+    core_committee: Optional[List[Dict[str, Any]]] = []
     tasks_count: int = 0
     completed_tasks_count: int = 0
     completion_percentage: float = 0.0

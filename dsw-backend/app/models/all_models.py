@@ -117,6 +117,7 @@ class Event(Base):
     coordinator_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     status: Mapped[EventStatus] = mapped_column(Enum(EventStatus), default=EventStatus.planned, index=True)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    core_committee: Mapped[Optional[list]] = mapped_column(JSON, default=list, nullable=True) # list of {role_name, faculty_id, faculty_name, faculty_email, faculty_department, faculty_designation, work_description}
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 

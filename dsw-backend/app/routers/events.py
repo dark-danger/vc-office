@@ -3,13 +3,13 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from app.database import get_db
-from app.core.deps import get_current_user, require_role
+from app.core.deps import get_current_user, get_current_user_optional, require_role
 from app.models.all_models import User, UserRole, Event, Task, TaskStatus, TaskSubmission
 from app.schemas.schemas import EventCreate, EventUpdate, EventOut, TaskOut
 from app.services.pdf_report_service import generate_micro_report_html, generate_merged_report_html
-from app.services.notification_service import log_audit
+from app.services.notification_service import create_notification, log_audit
 from app.routers.tasks import build_task_out
 from app.core.cache import ttl_cache
 
@@ -34,10 +34,39 @@ def build_event_out(e: Event) -> EventOut:
         status=e.status,
         created_by=e.created_by,
         created_at=e.created_at,
+        core_committee=getattr(e, "core_committee", None) or [],
         tasks_count=total,
         completed_tasks_count=completed,
         completion_percentage=pct
     )
+
+async def enrich_committee_faculty(committee_list: List[Dict[str, Any]], db: AsyncSession) -> List[Dict[str, Any]]:
+    enriched = []
+    if not committee_list:
+        return enriched
+
+    for member in committee_list:
+        f_id = member.get("faculty_id") or member.get("id")
+        if not f_id:
+            continue
+        fac_res = await db.execute(select(User).options(selectinload(User.dept)).where(User.id == int(f_id)))
+        fac = fac_res.scalar_one_or_none()
+        
+        dept_name = ""
+        if fac:
+            dept_name = fac.department or (fac.dept.name if getattr(fac, "dept", None) else "")
+
+        enriched.append({
+            "role_name": member.get("role_name", "Committee Member"),
+            "faculty_id": int(f_id),
+            "faculty_name": fac.name if fac else member.get("faculty_name", "Faculty Member"),
+            "faculty_email": fac.email if fac else member.get("faculty_email", ""),
+            "faculty_department": dept_name or member.get("faculty_department", ""),
+            "faculty_designation": fac.designation if fac else member.get("faculty_designation", "Faculty"),
+            "employee_id": (fac.employee_id if fac else member.get("employee_id", "")) or "",
+            "work_description": member.get("work_description", "")
+        })
+    return enriched
 
 @router.post("", response_model=EventOut)
 async def create_event(
@@ -45,6 +74,8 @@ async def create_event(
     current_user: User = Depends(require_role([UserRole.super_admin])),
     db: AsyncSession = Depends(get_db)
 ):
+    enriched_committee = await enrich_committee_faculty(payload.core_committee or [], db)
+
     event = Event(
         title=payload.title,
         description=payload.description,
@@ -54,6 +85,7 @@ async def create_event(
         venue=payload.venue,
         coordinator_id=payload.coordinator_id,
         status=payload.status,
+        core_committee=enriched_committee,
         created_by=current_user.id
     )
     db.add(event)
@@ -64,13 +96,23 @@ async def create_event(
     )
     created = res.scalar_one()
 
-    await log_audit(db, action="CREATE_EVENT", entity_type="event", actor_id=current_user.id, entity_id=event.id, meta={"title": event.title})
+    # Notify appointed Core Committee members
+    for mem in enriched_committee:
+        if mem.get("faculty_id"):
+            await create_notification(
+                db,
+                title=f"Appointed to Event Core Committee 🏛️",
+                body=f"You have been appointed as '{mem['role_name']}' for university event: '{event.title}'. Scope: {mem.get('work_description', 'Event coordination')}",
+                type="committee_appointment",
+                user_id=mem["faculty_id"],
+                link="/admin/events"
+            )
+
+    await log_audit(db, action="CREATE_EVENT", entity_type="event", actor_id=current_user.id, entity_id=event.id, meta={"title": event.title, "committee_count": len(enriched_committee)})
     await db.commit()
 
     ttl_cache.invalidate("dashboard_")
     return build_event_out(created)
-
-from app.core.deps import get_current_user, get_current_user_optional, require_role
 
 @router.get("", response_model=List[EventOut])
 async def list_events(
@@ -117,7 +159,26 @@ async def update_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    if "core_committee" in data and data["core_committee"] is not None:
+        enriched_committee = await enrich_committee_faculty(data["core_committee"], db)
+        data["core_committee"] = enriched_committee
+
+        # Notify any newly added committee members
+        existing_ids = {m.get("faculty_id") for m in (event.core_committee or [])}
+        for mem in enriched_committee:
+            f_id = mem.get("faculty_id")
+            if f_id and f_id not in existing_ids:
+                await create_notification(
+                    db,
+                    title=f"Appointed to Event Core Committee 🏛️",
+                    body=f"You have been appointed as '{mem['role_name']}' for university event: '{event.title}'. Scope: {mem.get('work_description', 'Event coordination')}",
+                    type="committee_appointment",
+                    user_id=f_id,
+                    link="/admin/events"
+                )
+
+    for k, v in data.items():
         setattr(event, k, v)
 
     await db.commit()

@@ -25,6 +25,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
   const adminNav: SidebarItem[] = [
     { label: 'Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard className="w-4 h-4 text-emerald-500" /> },
     { label: 'Tasks', path: '/admin/tasks', icon: <CheckSquare className="w-4 h-4 text-teal-400" /> },
+    { label: 'Events & Committees', path: '/admin/events', icon: <Calendar className="w-4 h-4 text-purple-400" /> },
     { label: 'Departments', path: '/admin/departments', icon: <Building2 className="w-4 h-4 text-blue-400" /> },
     { label: 'HODs', path: '/admin/hods', icon: <ShieldCheck className="w-4 h-4 text-emerald-400" /> },
     { label: 'Faculties', path: '/admin/faculty', icon: <Users className="w-4 h-4 text-cyan-400" /> },
